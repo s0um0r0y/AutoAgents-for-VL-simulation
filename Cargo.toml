@@ -2,5 +2,8 @@
 name = "autoagents"
 version = "0.1.0"
 edition = "2021"
+description = "Agent Framework for Building Autonomous Agents"
+license = "MIT OR Apache-2.0"
+
 
 [dependencies]
