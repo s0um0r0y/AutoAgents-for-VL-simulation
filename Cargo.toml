@@ -1,9 +1,16 @@
-[package]
-name = "autoagents"
+[workspace]
+default-members = ["crates/core"]
+members = ["crates/core", "crates/autoagents", "examples/*", "crates/llm"]
+
+resolver = "2"
+
+[workspace.package]
 version = "0.1.0"
 edition = "2021"
-description = "Agent Framework for Building Autonomous Agents"
 license = "MIT OR Apache-2.0"
+description = "Agent Framework for Building Autonomous Agents"
+repository = "https://github.com/liquidos-ai/AutoAgents"
+keywords = ["agents", "llm"]
+categories = []
 
-
-[dependencies]
+[workspace.dependencies]

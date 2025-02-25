@@ -1,0 +1,16 @@
+[package]
+name = "autoagents-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description.workspace = true
+repository.workspace = true
+keywords.workspace = true
+categories.workspace = true
+
+[dependencies]
+tokio = { version = "1.43.0", features = ["full"] }
+async-trait = "0.1.86"
+reqwest = { version = "0.12.12", features = ["json"] }
+serde = { version = "1.0.218", features = ["derive"] }
+serde_json = "1.0.139"
