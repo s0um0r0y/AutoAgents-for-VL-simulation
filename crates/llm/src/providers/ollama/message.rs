@@ -15,6 +15,30 @@ impl From<TextGenerationOptions> for OllamaTextGenerationOptions {
     }
 }
 
+macro_rules! common_setters_for_request {
+    () => {
+        pub fn set_model(mut self, model: String) -> Self {
+            self.model = model;
+            self
+        }
+
+        pub fn set_stream(mut self, stream: bool) -> Self {
+            self.stream = Some(stream);
+            self
+        }
+
+        pub fn set_format(mut self, format: String) -> Self {
+            self.format = Some(format);
+            self
+        }
+
+        pub fn set_keep_alive(mut self, keep_alive: String) -> Self {
+            self.keep_alive = Some(keep_alive);
+            self
+        }
+    };
+}
+
 #[allow(dead_code)]
 #[derive(Debug, Serialize, Deserialize)]
 pub struct OllamaGenerateRequest {
@@ -45,10 +69,7 @@ impl Default for OllamaGenerateRequest {
 
 #[allow(dead_code)]
 impl OllamaGenerateRequest {
-    pub fn set_model(mut self, model: String) -> Self {
-        self.model = model;
-        self
-    }
+    common_setters_for_request!();
 
     pub fn set_options(mut self, options: OllamaTextGenerationOptions) -> Self {
         self.options = Some(options);
@@ -143,10 +164,7 @@ impl Default for OllamaChatRequest {
 
 #[allow(dead_code)]
 impl OllamaChatRequest {
-    pub fn set_model(mut self, model: String) -> Self {
-        self.model = model;
-        self
-    }
+    common_setters_for_request!();
 
     pub fn set_messages<A: Into<OllamaChatMessages>>(mut self, messages: A) -> Self {
         self.messages = messages.into();

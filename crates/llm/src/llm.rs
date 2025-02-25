@@ -65,12 +65,19 @@ pub struct ChatCompletionResponse {
     pub created_at: String,
     pub message: ChatMessage,
     pub done: bool,
+    #[serde(default)]
     pub done_reason: String,
+    #[serde(default)]
     pub total_duration: i64,
+    #[serde(default)]
     pub load_duration: i64,
+    #[serde(default)]
     pub prompt_eval_count: i32,
+    #[serde(default)]
     pub prompt_eval_duration: i64,
+    #[serde(default)]
     pub eval_count: i32,
+    #[serde(default)]
     pub eval_duration: i64,
 }
 
