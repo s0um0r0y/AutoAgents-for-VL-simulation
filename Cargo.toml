@@ -1,6 +1,6 @@
 [workspace]
 default-members = ["crates/core"]
-members = ["crates/core", "crates/autoagents", "examples/*", "crates/llm"]
+members = ["crates/core", "crates/autoagents", "examples/*", "crates/llm", "crates/chat-server"]
 
 resolver = "2"
 
