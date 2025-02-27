@@ -134,6 +134,14 @@ impl From<Vec<ChatMessage>> for OllamaChatMessages {
 pub struct OllamaTool {
     #[serde(rename = "type")]
     pub _type: String,
+    pub function: OllamaFunction,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct OllamaFunction {
+    pub name: String,
+    pub description: String,
+    pub parameters: serde_json::Value, // You can further define a struct if you want a stricter schema.
 }
 
 #[allow(dead_code)]
@@ -179,5 +187,19 @@ impl OllamaChatRequest {
     pub fn set_options(mut self, options: OllamaChatCompletionOptions) -> Self {
         self.options = Some(options);
         self
+    }
+
+    pub fn from_chat_messages(messages: Vec<ChatMessage>) -> Self {
+        let ollama_messages: Vec<OllamaChatMessage> = messages
+            .iter()
+            .cloned()
+            .map(OllamaChatMessage::from)
+            .collect();
+
+        Self {
+            messages: OllamaChatMessages(ollama_messages),
+            tools: None,
+            ..Default::default()
+        }
     }
 }

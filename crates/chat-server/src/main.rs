@@ -43,7 +43,7 @@ struct Delta {
 async fn chat_completion_endpoint(req: web::Json<ChatRequest>) -> impl Responder {
     let request = req.into_inner();
     let stream_enabled = request.stream.unwrap_or(false);
-    let llm = Ollama::new().with_model(OllamaModel::DeepSeekR18B);
+    let llm = Ollama::new().with_model(OllamaModel::Llama3_2);
     let messages = request.messages.clone();
 
     if stream_enabled {

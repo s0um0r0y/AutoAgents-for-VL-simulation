@@ -1,6 +1,13 @@
 [workspace]
 default-members = ["crates/core"]
-members = ["crates/core", "crates/autoagents", "examples/*", "crates/llm", "crates/chat-server"]
+members = [
+    "crates/core",
+    "crates/autoagents",
+    "examples/*",
+    "crates/llm",
+    "crates/chat-server",
+    "crates/derive",
+]
 
 resolver = "2"
 
@@ -14,6 +21,7 @@ keywords = ["agents", "llm"]
 categories = []
 
 [workspace.dependencies]
+syn = { version = "2.0.98", features = ["full"] }
 tokio = { version = "1.43.0", features = ["full"] }
 async-trait = "0.1.86"
 reqwest = { version = "0.12.12", features = ["json", "stream"] }
@@ -24,3 +32,6 @@ strum_macros = "0.27.1"
 tokio-stream = "0.1.17"
 thiserror = "2.0.11"
 futures = "0.3.31"
+proc-macro2 = "1.0.93"
+quote = "1.0.38"
+clap = { version = "4.5.31", features = ["derive"] }

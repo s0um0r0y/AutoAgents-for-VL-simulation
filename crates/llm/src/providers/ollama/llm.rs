@@ -1,6 +1,6 @@
 use super::{
     api::OllamaAPI,
-    message::{OllamaGenerateRequest, OllamaTextGenerationOptions},
+    message::{OllamaGenerateRequest, OllamaTextGenerationOptions, OllamaTool},
     model::OllamaModel,
 };
 use crate::{
@@ -10,8 +10,8 @@ use crate::{
         TextGenerationResponse, LLM,
     },
     net::http_request::HTTPRequest,
-    providers::ollama::message::{OllamaChatCompletionOptions, OllamaChatRequest},
-    utils,
+    providers::ollama::message::{OllamaChatCompletionOptions, OllamaChatRequest, OllamaFunction},
+    utils, Tool,
 };
 use async_trait::async_trait;
 use futures::stream::TryStreamExt;
@@ -30,10 +30,11 @@ pub enum OllamaError {
 
 impl LLMProviderError for OllamaError {}
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct Ollama<'a> {
     base_url: &'a str,
     pub model: Option<OllamaModel>,
+    pub tools: Vec<Box<dyn Tool>>,
 }
 
 impl Default for Ollama<'_> {
@@ -41,6 +42,7 @@ impl Default for Ollama<'_> {
         Self {
             base_url: "http://localhost:11434",
             model: Some(OllamaModel::DeepSeekR18B),
+            tools: vec![],
         }
     }
 }
@@ -70,8 +72,43 @@ impl<'a> Ollama<'a> {
         self.model = Some(model);
         self
     }
+}
 
-    pub async fn text_generation_stream(
+#[async_trait]
+impl<'a> LLM for Ollama<'a> {
+    type Error = OllamaError;
+
+    fn name(&self) -> &'a str {
+        "Ollama"
+    }
+
+    async fn text_generation(
+        &self,
+        prompt: &str,
+        system_prompt: &str,
+        options: Option<TextGenerationOptions>,
+    ) -> Result<TextGenerationResponse, Self::Error> {
+        let model = self.model()?;
+        let base_url = self.base_url()?;
+        let options: OllamaTextGenerationOptions = options.unwrap_or_default().into();
+        let body = OllamaGenerateRequest::default()
+            .set_model(model)
+            .set_options(options)
+            .set_system_prompt(system_prompt.into())
+            .set_prompt(prompt.into());
+
+        let url = utils::create_model_url(base_url, OllamaAPI::TextGenerate);
+        let text = HTTPRequest::request(url, serde_json::json!(body))
+            .await
+            .map_err(|e| OllamaError::Api(e.to_string()))?;
+
+        let ollama_response: TextGenerationResponse =
+            serde_json::from_str(&text).map_err(|e| OllamaError::Parsing(e.to_string()))?;
+
+        Ok(ollama_response)
+    }
+
+    async fn text_generation_stream(
         &self,
         prompt: &str,
         system_prompt: &str,
@@ -122,7 +159,49 @@ impl<'a> Ollama<'a> {
             .boxed()
     }
 
-    pub async fn chat_completion_stream(
+    async fn chat_completion(
+        &self,
+        messages: Vec<ChatMessage>,
+        options: Option<ChatCompletionOptions>,
+    ) -> Result<ChatCompletionResponse, Self::Error> {
+        let model = self.model()?;
+        let base_url = self.base_url()?;
+        let options: OllamaChatCompletionOptions = options.unwrap_or_default().into();
+        let mut body = OllamaChatRequest::from_chat_messages(messages)
+            .set_model(model)
+            .set_options(options);
+
+        // Add any registered tools from the LLM into the chat request.
+        if !self.tools.is_empty() {
+            let tools: Vec<OllamaTool> = self
+                .tools
+                .iter()
+                .map(|tool| OllamaTool {
+                    _type: "function".into(),
+                    function: OllamaFunction {
+                        name: tool.name().to_string(),
+                        description: tool.description().to_string(),
+                        parameters: tool.args_schema(),
+                    },
+                })
+                .collect();
+            body = body.set_tools(tools);
+        }
+
+        let url = utils::create_model_url(base_url, OllamaAPI::ChatCompletion);
+        let text = HTTPRequest::request(url, serde_json::json!(body))
+            .await
+            .map_err(|e| OllamaError::Api(e.to_string()))?;
+
+        let ollama_response: ChatCompletionResponse = serde_json::from_str(&text).map_err(|e| {
+            println!("TETS: {:?} {}", e, text);
+            OllamaError::Parsing(e.to_string())
+        })?;
+
+        Ok(ollama_response)
+    }
+
+    async fn chat_completion_stream(
         &self,
         messages: Vec<ChatMessage>,
         options: Option<ChatCompletionOptions>,
@@ -137,9 +216,8 @@ impl<'a> Ollama<'a> {
         };
 
         let options: OllamaChatCompletionOptions = options.unwrap_or_default().into();
-        let body = OllamaChatRequest::default()
+        let body = OllamaChatRequest::from_chat_messages(messages)
             .set_model(model)
-            .set_messages(messages)
             .set_stream(true)
             .set_options(options);
 
@@ -168,70 +246,19 @@ impl<'a> Ollama<'a> {
             })
             .boxed()
     }
-}
-
-#[async_trait]
-impl<'a> LLM for Ollama<'a> {
-    type Error = OllamaError;
-
-    fn name(&self) -> &'a str {
-        "Ollama"
-    }
-
-    async fn text_generation(
-        &self,
-        prompt: &str,
-        system_prompt: &str,
-        options: Option<TextGenerationOptions>,
-    ) -> Result<TextGenerationResponse, Self::Error> {
-        let model = self.model()?;
-        let base_url = self.base_url()?;
-        let options: OllamaTextGenerationOptions = options.unwrap_or_default().into();
-        let body = OllamaGenerateRequest::default()
-            .set_model(model)
-            .set_options(options)
-            .set_system_prompt(system_prompt.into())
-            .set_prompt(prompt.into());
-
-        let url = utils::create_model_url(base_url, OllamaAPI::TextGenerate);
-        let text = HTTPRequest::request(url, serde_json::json!(body))
-            .await
-            .map_err(|e| OllamaError::Api(e.to_string()))?;
-
-        let ollama_response: TextGenerationResponse =
-            serde_json::from_str(&text).map_err(|e| OllamaError::Parsing(e.to_string()))?;
-
-        Ok(ollama_response)
-    }
-
-    async fn chat_completion(
-        &self,
-        messages: Vec<ChatMessage>,
-        options: Option<ChatCompletionOptions>,
-    ) -> Result<ChatCompletionResponse, Self::Error> {
-        let model = self.model()?;
-        let base_url = self.base_url()?;
-        let options: OllamaChatCompletionOptions = options.unwrap_or_default().into();
-        let body = OllamaChatRequest::default()
-            .set_model(model)
-            .set_messages(messages)
-            .set_options(options);
-
-        let url = utils::create_model_url(base_url, OllamaAPI::ChatCompletion);
-        let text = HTTPRequest::request(url, serde_json::json!(body))
-            .await
-            .map_err(|e| OllamaError::Api(e.to_string()))?;
-
-        let ollama_response: ChatCompletionResponse =
-            serde_json::from_str(&text).map_err(|e| OllamaError::Parsing(e.to_string()))?;
-
-        Ok(ollama_response)
-    }
 
     fn model_name(&self) -> String {
         match &self.model {
             Some(model) => model.to_string(),
             None => "".to_string(),
         }
+    }
+
+    fn tools(&self) -> &Vec<Box<dyn Tool>> {
+        &self.tools
+    }
+
+    fn register_tool(&mut self, tool: impl Tool + 'static) {
+        self.tools.push(Box::new(tool));
     }
 }
