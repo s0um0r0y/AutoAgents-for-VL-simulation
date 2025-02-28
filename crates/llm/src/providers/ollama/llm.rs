@@ -193,10 +193,8 @@ impl<'a> LLM for Ollama<'a> {
             .await
             .map_err(|e| OllamaError::Api(e.to_string()))?;
 
-        let ollama_response: ChatCompletionResponse = serde_json::from_str(&text).map_err(|e| {
-            println!("TETS: {:?} {}", e, text);
-            OllamaError::Parsing(e.to_string())
-        })?;
+        let ollama_response: ChatCompletionResponse =
+            serde_json::from_str(&text).map_err(|e| OllamaError::Parsing(e.to_string()))?;
 
         Ok(ollama_response)
     }
@@ -216,10 +214,27 @@ impl<'a> LLM for Ollama<'a> {
         };
 
         let options: OllamaChatCompletionOptions = options.unwrap_or_default().into();
-        let body = OllamaChatRequest::from_chat_messages(messages)
+        let mut body = OllamaChatRequest::from_chat_messages(messages)
             .set_model(model)
             .set_stream(true)
             .set_options(options);
+
+        // Add any registered tools from the LLM into the chat request.
+        if !self.tools.is_empty() {
+            let tools: Vec<OllamaTool> = self
+                .tools
+                .iter()
+                .map(|tool| OllamaTool {
+                    _type: "function".into(),
+                    function: OllamaFunction {
+                        name: tool.name().to_string(),
+                        description: tool.description().to_string(),
+                        parameters: tool.args_schema(),
+                    },
+                })
+                .collect();
+            body = body.set_tools(tools);
+        }
 
         let url = utils::create_model_url(base_url, OllamaAPI::ChatCompletion);
 

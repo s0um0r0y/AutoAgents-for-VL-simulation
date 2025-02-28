@@ -23,7 +23,7 @@ struct Args {
 #[tokio::main]
 async fn main() {
     let args = Args::parse();
-    let llm = Ollama::new().with_model(OllamaModel::Llama3_2);
+    let llm = Ollama::new().with_model(OllamaModel::Qwen2Coder7B);
     match args.usecase {
         UseCase::Tool => tool::tool(llm).await,
         UseCase::Chat => chat::stream(llm).await,

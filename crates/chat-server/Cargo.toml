@@ -10,6 +10,7 @@ categories.workspace = true
 
 [dependencies]
 autoagents = { path = "../../crates/autoagents" }
+autoagents-derive = { path = "../../crates/derive" }
 tokio = { workspace = true }
 futures = { workspace = true }
 serde = { workspace = true }

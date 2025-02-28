@@ -25,7 +25,7 @@ pub struct GetCurrentWeatherOutput {
 
 #[tool(
     name = "GetCurrentWeather",
-    description = "Get the current weather for a location",
+    description = "Get the current weather for a location, use this only when requested for weather",
     args = GetCurrentWeatherArgs,
     output = GetCurrentWeatherOutput
 )]
@@ -49,17 +49,19 @@ pub async fn tool(mut llm: impl LLM) {
             vec![
                 ChatMessage {
                     role: ChatRole::System,
-                    content: "You are an Assistant who helps resolve user queries.".into(),
+                    content: "You are an Assistant who helps resolve user queries. Use tools only when asked for!".into(),
                 },
                 ChatMessage {
                     role: ChatRole::User,
-                    content: "What is the current weather in Seattle".into(),
+                    content: "Heyy!".into(),
                 },
             ],
             None,
         )
         .await
         .unwrap();
+
+    println!("{:?}", response);
 
     match response.message.role {
         ChatRole::Assistant => {

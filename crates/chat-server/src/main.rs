@@ -4,12 +4,16 @@ use actix_web::{
     App, HttpResponse, HttpServer, Responder,
 };
 use autoagents::{
-    llm::{ChatMessage, LLM},
+    llm::{ChatMessage, ChatRole, LLM},
     providers::ollama::{model::OllamaModel, Ollama},
+    tool::ToolArg,
+    Tool,
 };
+use autoagents_derive::{tool, ToolArg};
 use futures::StreamExt;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
+use serde_json::Value;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 #[derive(Deserialize)]
@@ -37,79 +41,137 @@ struct Choice {
 
 #[derive(Serialize)]
 struct Delta {
-    content: String,
+    pub role: ChatRole,
+    pub content: String,
+}
+
+#[derive(Serialize, Deserialize, ToolArg)]
+pub struct GetCurrentWeatherArgs {}
+
+#[tool(
+    name = "GetCurrentWeather",
+    description = "Use this tool to get the current Weather",
+    args = GetCurrentWeatherArgs,
+    output = String
+)]
+fn get_current_weather(_args: GetCurrentWeatherArgs) -> String {
+    // Dummy implementation.
+    format!("Current Time is {:?}", SystemTime::now())
 }
 
 async fn chat_completion_endpoint(req: web::Json<ChatRequest>) -> impl Responder {
     let request = req.into_inner();
     let stream_enabled = request.stream.unwrap_or(false);
-    let llm = Ollama::new().with_model(OllamaModel::Llama3_2);
+
+    // Initialize the LLM with the Llama3.2 model and register the tool.
+    let mut llm = Ollama::new().with_model(OllamaModel::Llama3_2);
+    llm.register_tool(GetCurrentWeather);
+
     let messages = request.messages.clone();
 
+    // Helper closure to generate a timestamp and ID.
+    let generate_timestamp_id = || -> (u64, String) {
+        let start_time = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs();
+        (start_time, format!("chatcmpl-{}", start_time))
+    };
+
     if stream_enabled {
-        let sse_stream = llm
-            .chat_completion_stream(messages, None)
-            .await
-            .map(|chunk_result| match chunk_result {
-                Ok(resp) => {
-                    let start_time = SystemTime::now()
-                        .duration_since(UNIX_EPOCH)
-                        .unwrap()
-                        .as_secs();
-                    let chunk = ChatChunk {
-                        id: format!("chatcmpl-{}", start_time),
-                        object: "chat.completion.chunk".to_string(),
-                        created: start_time,
-                        model: resp.model.clone(),
-                        choices: vec![Choice {
-                            delta: Delta {
-                                content: resp.message.content,
-                            },
-                            index: 0,
-                            finish_reason: if resp.done {
-                                Some("stop".to_string())
-                            } else {
-                                None
-                            },
-                        }],
-                    };
-                    let json = serde_json::to_string(&chunk).unwrap_or_else(|_| "{}".into());
-                    Ok(Bytes::from(format!("data: {}\n\n", json)))
-                }
-                Err(e) => Err(ErrorInternalServerError(e)),
-            });
+        // For SSE, create a stream that maps each LLM chunk to an SSE message.
+        let sse_stream =
+            llm.chat_completion_stream(messages, None)
+                .await
+                .map(move |chunk_result| match chunk_result {
+                    Ok(resp) => {
+                        let (start_time, id) = generate_timestamp_id();
+
+                        //If the message role is assistant, check for tool calls.
+                        if let Some(tool_call) = resp.message.tool_calls.first() {
+                            if let Some(tool_result) = llm.call_tool(
+                                &tool_call.function.name,
+                                tool_call.function.arguments.clone(),
+                            ) {
+                                // If a tool call produced a result, build a chunk with that output.
+                                let tool_chunk = ChatChunk {
+                                    id,
+                                    object: "chat.completion.chunk".to_string(),
+                                    created: start_time,
+                                    model: resp.model,
+                                    choices: vec![Choice {
+                                        delta: Delta {
+                                            role: ChatRole::Assistant,
+                                            content: tool_result.to_string(),
+                                        },
+                                        index: 0,
+                                        finish_reason: Some("stop".to_string()),
+                                    }],
+                                };
+                                let json = serde_json::to_string(&tool_chunk)
+                                    .unwrap_or_else(|_| "{}".into());
+                                return Ok(Bytes::from(format!("data: {}\n\n", json)));
+                            }
+                        }
+
+                        // Otherwise, return the base chunk.
+                        // Build the base chunk using the LLM's response.
+                        let base_chunk = ChatChunk {
+                            id: id.clone(),
+                            object: "chat.completion.chunk".to_string(),
+                            created: start_time,
+                            model: resp.model.clone(),
+                            choices: vec![Choice {
+                                delta: Delta {
+                                    role: ChatRole::Assistant,
+                                    content: resp.message.content.clone(),
+                                },
+                                index: 0,
+                                finish_reason: if resp.done {
+                                    Some("stop".to_string())
+                                } else {
+                                    None
+                                },
+                            }],
+                        };
+                        let json =
+                            serde_json::to_string(&base_chunk).unwrap_or_else(|_| "{}".into());
+                        Ok(Bytes::from(format!("data: {}\n\n", json)))
+                    }
+                    Err(e) => Err(ErrorInternalServerError(e)),
+                });
 
         HttpResponse::Ok()
             .content_type("text/event-stream")
             .streaming(sse_stream)
     } else {
-        // Non-streaming response
-        let resp = llm.chat_completion(messages, None).await.unwrap();
-        let start_time = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_secs();
-        let response = json!({
-            "id": format!("chatcmpl-{}", start_time),
-            "object": "chat.completion",
-            "created": start_time,
-            "model": request.model,
-            "choices": [{
-                "message": {
-                    "role": "assistant",
-                    "content": resp.message.content
-                },
-                "finish_reason": "stop",
-                "index": 0
-            }]
-        });
-        HttpResponse::Ok()
-            .content_type("application/json")
-            .json(response)
+        // Handle non-streaming response.
+        match llm.chat_completion(messages, None).await {
+            Ok(resp) => {
+                let (start_time, id) = generate_timestamp_id();
+                let response_body = json!({
+                    "id": id,
+                    "object": "chat.completion",
+                    "created": start_time,
+                    "model": request.model,
+                    "choices": [{
+                        "message": {
+                            "role": "assistant",
+                            "content": resp.message.content
+                        },
+                        "finish_reason": "stop",
+                        "index": 0
+                    }]
+                });
+                HttpResponse::Ok()
+                    .content_type("application/json")
+                    .json(response_body)
+            }
+            Err(e) => HttpResponse::InternalServerError().body(format!("Error: {}", e)),
+        }
     }
 }
 
-/// Fetch models endpoint mimicking OpenAI's GET /v1/models API.
 async fn fetch_models() -> impl Responder {
     // Hard-coded list of models for demonstration purposes.
     let models = json!({

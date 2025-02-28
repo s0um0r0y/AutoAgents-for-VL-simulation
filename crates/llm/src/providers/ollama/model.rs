@@ -9,4 +9,6 @@ pub enum OllamaModel {
     DeepSeekR1,
     #[strum(serialize = "llama3.2")]
     Llama3_2,
+    #[strum(serialize = "qwen2.5-coder:7b")]
+    Qwen2Coder7B,
 }
