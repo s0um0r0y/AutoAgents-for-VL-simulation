@@ -12,6 +12,12 @@ impl HTTPRequest {
         response.text().await
     }
 
+    pub fn request_sync(url: String, body: Value) -> Result<String, Error> {
+        let mut response = ureq::post(&url).send_json(&body).unwrap();
+        let body = response.body_mut();
+        Ok(body.read_to_string().unwrap())
+    }
+
     pub async fn stream_request(
         url: String,
         body: Value,

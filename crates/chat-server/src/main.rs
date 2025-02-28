@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 use actix_web::{
     error::ErrorInternalServerError,
     web::{self, Bytes},
@@ -11,10 +12,12 @@ use autoagents::{
 };
 use autoagents_derive::{tool, ToolArg};
 use futures::StreamExt;
+use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use serde_json::Value;
 use std::time::{SystemTime, UNIX_EPOCH};
+use urlencoding::encode;
 
 #[derive(Deserialize)]
 struct ChatRequest {
@@ -59,13 +62,201 @@ fn get_current_weather(_args: GetCurrentWeatherArgs) -> String {
     format!("Current Time is {:?}", SystemTime::now())
 }
 
+#[derive(Serialize, Deserialize, ToolArg)]
+pub struct SearchNewsArgs {
+    pub query: String,
+}
+
+#[derive(Deserialize)]
+struct NewsArticleSource {
+    id: Option<String>,
+    name: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct NewsArticle {
+    source: NewsArticleSource,
+    author: Option<String>,
+    title: String,
+    description: Option<String>,
+    url: String,
+    #[serde(rename = "urlToImage")]
+    url_to_image: Option<String>,
+    #[serde(rename = "publishedAt")]
+    published_at: String,
+    content: String,
+}
+
+#[derive(Deserialize)]
+struct NewsApiResponse {
+    articles: Vec<NewsArticle>,
+}
+
+#[tool(
+    name = "SearchNews",
+    description = "Use this tool to search News using for the given query",
+    args = SearchNewsArgs,
+    output = String
+)]
+fn search_news(args: SearchNewsArgs) -> String {
+    println!("Search Tool Query {}", args.query);
+    // Retrieve your News API key from the environment.
+    let api_key = std::env::var("NEWS_API_KEY").expect("NEWS_API_KEY environment variable not set");
+
+    // Encode the query to be URL-safe.
+    let query_encoded = encode(&args.query);
+
+    // Build the URL using the News API endpoint.
+    let url = format!(
+        "https://newsapi.org/v2/everything?q={}&sortBy=publishedAt&apiKey={}&pageSize=5",
+        query_encoded, api_key
+    );
+
+    // Perform the GET request using ureq.
+    let mut response = ureq::get(&url).call().unwrap();
+    if response.status() == StatusCode::OK {
+        // Deserialize the JSON response into our response struct.
+        // println!("Respnse {:?}", response.body_mut().read_to_string());
+        let news_response: Result<NewsApiResponse, _> = response.body_mut().read_json();
+        match news_response {
+            Ok(resp) => {
+                if resp.articles.is_empty() {
+                    "No news articles found.".to_string()
+                } else {
+                    let mut output = String::new();
+                    for article in resp.articles {
+                        output.push_str(&format!(
+                            "Title: {}\nDescription: {}\nURL: {}\n\n Content: {}",
+                            article.title,
+                            article
+                                .description
+                                .unwrap_or_else(|| "No description".to_string()),
+                            article.url,
+                            article.content
+                        ));
+                    }
+                    let llm = Ollama::new().with_model(OllamaModel::Qwen2_5_32B);
+                    let resp = llm.chat_completion_sync(
+                        vec![
+                            ChatMessage {
+                                role: ChatRole::System,
+                                content:
+                                    "You are an Assistant who can summarize given information into a markdown format"
+                                        .into(),
+                            },
+                            ChatMessage {
+                                role: ChatRole::User,
+                                content: format!("Summarize the below google search data for the query '{}': \n {}", args.query, output),
+                            },
+                        ],
+                        None,
+                    );
+                    let summarized_val = format!("{}", resp.unwrap().message.content);
+                    summarized_val
+                }
+            }
+            Err(e) => format!("Failed to parse news results: {}", e.to_string()),
+        }
+    } else {
+        format!("HTTP request failed with status: {}", response.status())
+    }
+}
+
+#[derive(Serialize, Deserialize, ToolArg)]
+pub struct SearchGoogleArgs {
+    pub query: String,
+}
+
+#[derive(Deserialize)]
+struct GoogleSearchResponse {
+    items: Option<Vec<GoogleSearchItem>>,
+}
+
+#[derive(Deserialize)]
+struct GoogleSearchItem {
+    title: String,
+    snippet: String,
+    link: String,
+}
+
+#[tool(
+    name = "SearchGoogle",
+    description = "Use this tool to search the internet with user queries",
+    args = SearchGoogleArgs,
+    output = String
+)]
+fn search_google(args: SearchGoogleArgs) -> String {
+    // Retrieve the API key and Custom Search Engine ID (CX) from environment variables.
+    let api_key =
+        std::env::var("GOOGLE_API_KEY").expect("GOOGLE_API_KEY environment variable not set");
+    let cx = std::env::var("GOOGLE_CX").expect("GOOGLE_CX environment variable not set");
+
+    // URL-encode the query.
+    println!("Tool Query {}", args.query);
+    let query_encoded = encode(&args.query);
+
+    // Build the URL using the Custom Search API endpoint.
+    let url = format!(
+        "https://www.googleapis.com/customsearch/v1?key={}&cx={}&q={}",
+        api_key, cx, query_encoded
+    );
+
+    // Perform the GET request synchronously using ureq.
+    let mut response = ureq::get(&url).call().unwrap();
+
+    if response.status() == StatusCode::OK {
+        // Deserialize the JSON response.
+        let search_response: Result<GoogleSearchResponse, _> = response.body_mut().read_json();
+        match search_response {
+            Ok(result) => {
+                if let Some(items) = result.items {
+                    let mut output = String::new();
+                    for item in items {
+                        output.push_str(&format!(
+                            "Title: {}\nSnippet: {}\nLink: {}\n\n",
+                            item.title, item.snippet, item.link
+                        ));
+                    }
+                    let llm = Ollama::new().with_model(OllamaModel::Qwen2_5_32B);
+                    let resp = llm.chat_completion_sync(
+                        vec![
+                            ChatMessage {
+                                role: ChatRole::System,
+                                content:
+                                    "You are an Assistant who can summarize given information into a markdown format"
+                                        .into(),
+                            },
+                            ChatMessage {
+                                role: ChatRole::User,
+                                content: format!("Summarize the below google search data for the query '{}': \n {}", args.query, output),
+                            },
+                        ],
+                        None,
+                    );
+
+                    let summarized_val = format!("{}", resp.unwrap().message.content);
+                    // println!("DATA {}", summarized_val.clone());
+                    summarized_val
+                } else {
+                    "No results found.".to_string()
+                }
+            }
+            Err(e) => format!("Failed to parse search results: {}", e),
+        }
+    } else {
+        format!("HTTP request failed with status: {}", response.status())
+    }
+}
+
 async fn chat_completion_endpoint(req: web::Json<ChatRequest>) -> impl Responder {
     let request = req.into_inner();
     let stream_enabled = request.stream.unwrap_or(false);
 
     // Initialize the LLM with the Llama3.2 model and register the tool.
-    let mut llm = Ollama::new().with_model(OllamaModel::Llama3_2);
+    let mut llm = Ollama::new().with_model(OllamaModel::Qwen2_5_32B);
     llm.register_tool(GetCurrentWeather);
+    llm.register_tool(SearchGoogle);
+    llm.register_tool(SearchNews);
 
     let messages = request.messages.clone();
 
@@ -86,7 +277,6 @@ async fn chat_completion_endpoint(req: web::Json<ChatRequest>) -> impl Responder
                 .map(move |chunk_result| match chunk_result {
                     Ok(resp) => {
                         let (start_time, id) = generate_timestamp_id();
-
                         //If the message role is assistant, check for tool calls.
                         if let Some(tool_call) = resp.message.tool_calls.first() {
                             if let Some(tool_result) = llm.call_tool(
@@ -94,6 +284,10 @@ async fn chat_completion_endpoint(req: web::Json<ChatRequest>) -> impl Responder
                                 tool_call.function.arguments.clone(),
                             ) {
                                 // If a tool call produced a result, build a chunk with that output.
+                                let content = match tool_result.as_str() {
+                                    Some(s) => s.to_owned(),
+                                    None => tool_result.to_string(),
+                                };
                                 let tool_chunk = ChatChunk {
                                     id,
                                     object: "chat.completion.chunk".to_string(),
@@ -102,7 +296,7 @@ async fn chat_completion_endpoint(req: web::Json<ChatRequest>) -> impl Responder
                                     choices: vec![Choice {
                                         delta: Delta {
                                             role: ChatRole::Assistant,
-                                            content: tool_result.to_string(),
+                                            content: content,
                                         },
                                         index: 0,
                                         finish_reason: Some("stop".to_string()),

@@ -30,6 +30,12 @@ pub trait LLM: Send + Sync {
         options: Option<ChatCompletionOptions>,
     ) -> Result<ChatCompletionResponse, Self::Error>;
 
+    fn chat_completion_sync(
+        &self,
+        messages: Vec<ChatMessage>,
+        options: Option<ChatCompletionOptions>,
+    ) -> Result<ChatCompletionResponse, Self::Error>;
+
     async fn chat_completion_stream(
         &self,
         messages: Vec<ChatMessage>,

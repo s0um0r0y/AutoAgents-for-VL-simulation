@@ -19,3 +19,4 @@ strum_macros = { workspace = true }
 tokio-stream = { workspace = true }
 thiserror = { workspace = true }
 futures = { workspace = true }
+ureq = { workspace = true }
