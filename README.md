@@ -126,6 +126,7 @@ async fn main() {
 ## TODO
 - [x] [REFACTOR] Refactor the Derive crate with more robust implementation
 - [ ] [FEATURE] Add Agent with tools and Agent Description
+- [ ] [FEATURE] Async Tools
 - [ ] [REFACTOR] Refactor the Provider implementation where, Provider needs to do as little implemetation as possible,
   i.e take up the heavy lifting
 - [ ] [REFACTOR] Add OpenAI Request and Response Which Other providers can directly reuse as it is most widley used
