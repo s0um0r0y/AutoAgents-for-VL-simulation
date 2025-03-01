@@ -40,7 +40,6 @@ fn get_current_weather(args: GetCurrentWeatherArgs) -> GetCurrentWeatherOutput {
 
 pub async fn tool(mut llm: impl LLM) {
     llm.register_tool(GetCurrentWeather);
-    println!("{}", GetCurrentWeather {}.args_schema());
 
     let tool_resul = llm.call_tool(
         "GetCurrentWeather",
@@ -57,7 +56,7 @@ pub async fn tool(mut llm: impl LLM) {
                 },
                 ChatMessage {
                     role: ChatRole::User,
-                    content: "Heyy!".into(),
+                    content: "Hey, What is the current weather in Seattle?".into(),
                 },
             ],
             None,
@@ -65,15 +64,13 @@ pub async fn tool(mut llm: impl LLM) {
         .await
         .unwrap();
 
-    println!("{:?}", response);
-
     match response.message.role {
         ChatRole::Assistant => {
             let tools_call = response.message.tool_calls;
             for tool in tools_call {
                 let tool_func = &tool.function;
                 let tool_resul = llm.call_tool(&tool_func.name, tool_func.arguments.clone());
-                println!("Test tool: {:?}", tool_resul);
+                println!("Tool Result: {:?}", tool_resul);
             }
         }
         _ => {

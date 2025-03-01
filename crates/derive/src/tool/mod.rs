@@ -1,16 +1,17 @@
 mod attr;
 pub(crate) mod field;
 pub(crate) mod input;
-
+mod json;
 use attr::ToolAttributes;
 use proc_macro::TokenStream;
 use quote::quote;
 use syn::{parse_macro_input, Ident, ItemFn};
 
+#[derive(Debug, Default)]
 pub(crate) struct ToolParser {}
 
 impl ToolParser {
-    pub fn parse(attr: TokenStream, item: TokenStream) -> TokenStream {
+    pub fn parse(&self, attr: TokenStream, item: TokenStream) -> TokenStream {
         let tool_attrs = parse_macro_input!(attr as ToolAttributes);
         let input_fn = parse_macro_input!(item as ItemFn);
         let fn_name = &input_fn.sig.ident;
@@ -40,17 +41,17 @@ impl ToolParser {
                 }
                 fn args_schema(&self) -> Value {
                     // Retrieve the JSON schema string from the input type.
-                        let params_str = <#args_type as ToolInputT>::io_schema();
-                        // Parse it into a serde_json::Value.
-                        let params_value: serde_json::Value = serde_json::from_str(params_str)
-                            .expect("Failed to parse parameters schema");
-                        params_value
+                    let params_str = <#args_type as ToolInputT>::io_schema();
+                    // Parse it into a serde_json::Value.
+                    let params_value: serde_json::Value = serde_json::from_str(params_str)
+                        .expect("Failed to parse parameters schema");
+                    params_value
                 }
             }
 
             impl std::fmt::Debug for #tool_struct_ident {
                 fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                    write!(f, "{:?}", self.name())
+                    write!(f, "{}", self.name())
                 }
             }
         };

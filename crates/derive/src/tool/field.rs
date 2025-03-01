@@ -5,9 +5,19 @@ use syn::{
     Ident, Lit, LitInt, LitStr, Result, Token,
 };
 
+#[derive(Display)]
 pub(crate) enum Choice {
     String(LitStr),
     Number(LitInt),
+}
+
+impl Choice {
+    pub(crate) fn to_string(&self) -> String {
+        match self {
+            Self::Number(n) => n.to_string(),
+            Self::String(s) => s.value(),
+        }
+    }
 }
 
 impl Parse for Choice {

@@ -63,6 +63,7 @@ fn get_current_weather(_args: GetCurrentWeatherArgs) -> String {
 
 #[derive(Serialize, Deserialize, ToolInput)]
 pub struct SearchNewsArgs {
+    #[input(description = "Query to use for the news Search")]
     pub query: String,
 }
 
@@ -163,6 +164,7 @@ fn search_news(args: SearchNewsArgs) -> String {
 
 #[derive(Serialize, Deserialize, ToolInput)]
 pub struct SearchGoogleArgs {
+    #[input(description = "Query to use for the google Search")]
     pub query: String,
 }
 
