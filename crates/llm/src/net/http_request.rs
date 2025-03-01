@@ -6,14 +6,14 @@ use serde_json::Value;
 pub(crate) struct HTTPRequest {}
 
 impl HTTPRequest {
-    pub async fn request(url: String, body: Value) -> Result<String, Error> {
+    pub async fn request(url: &str, body: Value) -> Result<String, Error> {
         let client = reqwest::Client::new();
-        let response = client.post(&url).json(&body).send().await?;
+        let response = client.post(url).json(&body).send().await?;
         response.text().await
     }
 
-    pub fn request_sync(url: String, body: Value) -> Result<String, Error> {
-        let mut response = ureq::post(&url).send_json(&body).unwrap();
+    pub fn request_sync(url: &str, body: Value) -> Result<String, Error> {
+        let mut response = ureq::post(url).send_json(&body).unwrap();
         let body = response.body_mut();
         Ok(body.read_to_string().unwrap())
     }

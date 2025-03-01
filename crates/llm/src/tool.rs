@@ -12,6 +12,6 @@ pub trait Tool: Send + Sync + Debug {
     fn run(&self, args: Value) -> Value;
 }
 
-pub trait ToolArg {
+pub trait ToolInputT {
     fn io_schema() -> &'static str;
 }

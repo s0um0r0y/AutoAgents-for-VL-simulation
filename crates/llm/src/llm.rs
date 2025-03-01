@@ -1,4 +1,4 @@
-use crate::{error::LLMProviderError, Tool};
+use crate::{error::LLMProviderError, tool::Tool};
 use async_trait::async_trait;
 use futures::stream::BoxStream;
 use serde::{Deserialize, Serialize};

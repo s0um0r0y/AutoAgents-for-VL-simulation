@@ -7,10 +7,9 @@ use actix_web::{
 use autoagents::{
     llm::{ChatMessage, ChatRole, LLM},
     providers::ollama::{model::OllamaModel, Ollama},
-    tool::ToolArg,
-    Tool,
+    tool::{Tool, ToolInputT},
 };
-use autoagents_derive::{tool, ToolArg};
+use autoagents_derive::{tool, ToolInput};
 use futures::StreamExt;
 use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
@@ -48,13 +47,13 @@ struct Delta {
     pub content: String,
 }
 
-#[derive(Serialize, Deserialize, ToolArg)]
+#[derive(Serialize, Deserialize, ToolInput)]
 pub struct GetCurrentWeatherArgs {}
 
 #[tool(
     name = "GetCurrentWeather",
     description = "Use this tool to get the current Weather",
-    args = GetCurrentWeatherArgs,
+    input = GetCurrentWeatherArgs,
     output = String
 )]
 fn get_current_weather(_args: GetCurrentWeatherArgs) -> String {
@@ -62,7 +61,7 @@ fn get_current_weather(_args: GetCurrentWeatherArgs) -> String {
     format!("Current Time is {:?}", SystemTime::now())
 }
 
-#[derive(Serialize, Deserialize, ToolArg)]
+#[derive(Serialize, Deserialize, ToolInput)]
 pub struct SearchNewsArgs {
     pub query: String,
 }
@@ -95,7 +94,7 @@ struct NewsApiResponse {
 #[tool(
     name = "SearchNews",
     description = "Use this tool to search News using for the given query",
-    args = SearchNewsArgs,
+    input = SearchNewsArgs,
     output = String
 )]
 fn search_news(args: SearchNewsArgs) -> String {
@@ -162,7 +161,7 @@ fn search_news(args: SearchNewsArgs) -> String {
     }
 }
 
-#[derive(Serialize, Deserialize, ToolArg)]
+#[derive(Serialize, Deserialize, ToolInput)]
 pub struct SearchGoogleArgs {
     pub query: String,
 }
@@ -182,7 +181,7 @@ struct GoogleSearchItem {
 #[tool(
     name = "SearchGoogle",
     description = "Use this tool to search the internet with user queries",
-    args = SearchGoogleArgs,
+    input = SearchGoogleArgs,
     output = String
 )]
 fn search_google(args: SearchGoogleArgs) -> String {

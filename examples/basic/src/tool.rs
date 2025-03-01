@@ -2,19 +2,21 @@
 use autoagents::{
     llm::{ChatMessage, ChatRole, TextGenerationOptions, LLM},
     providers::ollama::{model::OllamaModel, Ollama},
-    tool::ToolArg,
-    Tool,
+    tool::{Tool, ToolInputT},
 };
-use autoagents_derive::{tool, ToolArg};
+use autoagents_derive::{tool, ToolInput};
 use futures::stream::StreamExt;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-#[derive(Serialize, Deserialize, Debug, ToolArg)]
+#[derive(Serialize, Deserialize, Debug, ToolInput)]
 pub struct GetCurrentWeatherArgs {
-    #[arg(description = "The location to get the weather for, e.g. San Francisco, CA")]
+    #[input(description = "The location to get the weather for, e.g. San Francisco, CA")]
     pub location: String,
-    #[arg(description = "The format to return the weather in, e.g. 'celsius' or 'fahrenheit'")]
+    #[input(
+        description = "The format to return the weather in, e.g. 'celsius' or 'fahrenheit'",
+        choice = ["celsius", "fahrenheit"]
+    )]
     pub format: String,
 }
 
@@ -26,7 +28,7 @@ pub struct GetCurrentWeatherOutput {
 #[tool(
     name = "GetCurrentWeather",
     description = "Get the current weather for a location, use this only when requested for weather",
-    args = GetCurrentWeatherArgs,
+    input = GetCurrentWeatherArgs,
     output = GetCurrentWeatherOutput
 )]
 fn get_current_weather(args: GetCurrentWeatherArgs) -> GetCurrentWeatherOutput {
@@ -38,6 +40,8 @@ fn get_current_weather(args: GetCurrentWeatherArgs) -> GetCurrentWeatherOutput {
 
 pub async fn tool(mut llm: impl LLM) {
     llm.register_tool(GetCurrentWeather);
+    println!("{}", GetCurrentWeather {}.args_schema());
+
     let tool_resul = llm.call_tool(
         "GetCurrentWeather",
         serde_json::from_str("{\"location\":\"test\",\"format\":\"tst\"}").unwrap(),

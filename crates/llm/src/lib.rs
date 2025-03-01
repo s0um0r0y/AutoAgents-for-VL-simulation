@@ -4,4 +4,3 @@ mod net;
 pub mod providers;
 pub mod tool;
 pub(crate) mod utils;
-pub use tool::Tool;

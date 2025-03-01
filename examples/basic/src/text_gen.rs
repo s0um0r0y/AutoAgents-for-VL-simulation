@@ -2,10 +2,7 @@
 use autoagents::{
     llm::{ChatMessage, ChatRole, TextGenerationOptions, LLM},
     providers::ollama::{model::OllamaModel, Ollama},
-    tool::ToolArg,
-    Tool,
 };
-use autoagents_derive::{tool, ToolArg};
 use futures::stream::StreamExt;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;

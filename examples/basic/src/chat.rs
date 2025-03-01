@@ -4,21 +4,20 @@ use std::{alloc::System, time::SystemTime};
 use autoagents::{
     llm::{ChatMessage, ChatRole, TextGenerationOptions, LLM},
     providers::ollama::{model::OllamaModel, Ollama},
-    tool::ToolArg,
-    Tool,
+    tool::{Tool, ToolInputT},
 };
-use autoagents_derive::{tool, ToolArg};
+use autoagents_derive::{tool, ToolInput};
 use futures::stream::StreamExt;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-#[derive(Serialize, Deserialize, ToolArg)]
+#[derive(Serialize, Deserialize, ToolInput)]
 pub struct GetCurrentWeatherArgs {}
 
 #[tool(
     name = "GetCurrentWeather",
     description = "Use this tool to get the current Weather",
-    args = GetCurrentWeatherArgs,
+    input = GetCurrentWeatherArgs,
     output = String
 )]
 fn get_current_weather(_args: GetCurrentWeatherArgs) -> String {

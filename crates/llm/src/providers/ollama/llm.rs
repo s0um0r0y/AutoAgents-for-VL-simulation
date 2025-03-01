@@ -11,7 +11,8 @@ use crate::{
     },
     net::http_request::HTTPRequest,
     providers::ollama::message::{OllamaChatCompletionOptions, OllamaChatRequest, OllamaFunction},
-    utils, Tool,
+    tool::Tool,
+    utils,
 };
 use async_trait::async_trait;
 use futures::stream::TryStreamExt;
@@ -98,7 +99,7 @@ impl<'a> LLM for Ollama<'a> {
             .set_prompt(prompt.into());
 
         let url = utils::create_model_url(base_url, OllamaAPI::TextGenerate);
-        let text = HTTPRequest::request(url, serde_json::json!(body))
+        let text = HTTPRequest::request(&url, serde_json::json!(body))
             .await
             .map_err(|e| OllamaError::Api(e.to_string()))?;
 
@@ -189,7 +190,7 @@ impl<'a> LLM for Ollama<'a> {
         }
 
         let url = utils::create_model_url(base_url, OllamaAPI::ChatCompletion);
-        let text = HTTPRequest::request(url, serde_json::json!(body))
+        let text = HTTPRequest::request(&url, serde_json::json!(body))
             .await
             .map_err(|e| OllamaError::Api(e.to_string()))?;
 
@@ -229,7 +230,7 @@ impl<'a> LLM for Ollama<'a> {
         }
 
         let url = utils::create_model_url(base_url, OllamaAPI::ChatCompletion);
-        let text = HTTPRequest::request_sync(url, serde_json::json!(body))
+        let text = HTTPRequest::request_sync(&url, serde_json::json!(body))
             .map_err(|e| OllamaError::Api(e.to_string()))?;
 
         let ollama_response: ChatCompletionResponse =
