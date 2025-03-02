@@ -85,8 +85,7 @@ impl InputParser {
                 return Err(Error::new(
                     proc_macro2::Span::call_site(),
                     "Uninon or Enums not yet supported!",
-                )
-                .into());
+                ));
             }
         };
         Ok(())
@@ -147,10 +146,10 @@ impl InputParser {
                 _type: json_type.to_string(),
             })
         } else {
-            return Err(Error::new(
+            Err(Error::new(
                 proc_macro2::Span::call_site(),
                 "Coudn't Create the tool arg property",
-            ));
+            ))
         }
     }
 
@@ -185,7 +184,7 @@ impl InputParser {
                 _ => true, // Invalid case
             });
 
-            if let Some(_) = invalid_choice {
+            if invalid_choice.is_some() {
                 return Err(Error::new(
                     proc_macro2::Span::call_site(),
                     "Choices must be of the same type as the field",

@@ -5,12 +5,12 @@ use syn::{
     Ident, Lit, LitInt, LitStr, Result, Token,
 };
 
-#[derive(Display)]
 pub(crate) enum Choice {
     String(LitStr),
     Number(LitInt),
 }
 
+#[allow(clippy::inherent_to_string)]
 impl Choice {
     pub(crate) fn to_string(&self) -> String {
         match self {

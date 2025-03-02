@@ -11,3 +11,7 @@ futures = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 clap = { workspace = true }
+async-trait = { workspace = true }
+urlencoding = "2.1.3"
+reqwest.workspace = true
+ureq = { version = "3.0.8", features = ["json"] }

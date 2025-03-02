@@ -36,3 +36,4 @@ proc-macro2 = "1.0.93"
 quote = "1.0.38"
 clap = { version = "4.5.31", features = ["derive"] }
 ureq = { version = "3.0.8", features = ["json"] }
+uuid = { version = "1.15.1", features = ["v4"] }

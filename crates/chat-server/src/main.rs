@@ -135,7 +135,7 @@ fn search_news(args: SearchNewsArgs) -> String {
                             article.content
                         ));
                     }
-                    let llm = Ollama::new().with_model(OllamaModel::Qwen2_5_32B);
+                    let llm = Ollama::new().set_model(OllamaModel::Qwen2_5_32B);
                     let resp = llm.chat_completion_sync(
                         vec![
                             ChatMessage {
@@ -218,7 +218,7 @@ fn search_google(args: SearchGoogleArgs) -> String {
                             item.title, item.snippet, item.link
                         ));
                     }
-                    let llm = Ollama::new().with_model(OllamaModel::Qwen2_5_32B);
+                    let llm = Ollama::new().set_model(OllamaModel::Qwen2_5_32B);
                     let resp = llm.chat_completion_sync(
                         vec![
                             ChatMessage {
@@ -254,10 +254,10 @@ async fn chat_completion_endpoint(req: web::Json<ChatRequest>) -> impl Responder
     let stream_enabled = request.stream.unwrap_or(false);
 
     // Initialize the LLM with the Llama3.2 model and register the tool.
-    let mut llm = Ollama::new().with_model(OllamaModel::Qwen2_5_32B);
-    llm.register_tool(GetCurrentWeather);
-    llm.register_tool(SearchGoogle);
-    llm.register_tool(SearchNews);
+    let mut llm = Ollama::new().set_model(OllamaModel::Qwen2_5_32B);
+    llm.register_tool(Box::new(GetCurrentWeather));
+    llm.register_tool(Box::new(SearchGoogle));
+    llm.register_tool(Box::new(SearchNews));
 
     let messages = request.messages.clone();
 

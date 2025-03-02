@@ -1,6 +1,4 @@
 #![allow(dead_code, unused_imports)]
-use std::{alloc::System, time::SystemTime};
-
 use autoagents::{
     llm::{ChatMessage, ChatRole, TextGenerationOptions, LLM},
     providers::ollama::{model::OllamaModel, Ollama},
@@ -10,6 +8,7 @@ use autoagents_derive::{tool, ToolInput};
 use futures::stream::StreamExt;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::{alloc::System, time::SystemTime};
 
 #[derive(Serialize, Deserialize, ToolInput)]
 pub struct GetCurrentWeatherArgs {}
@@ -26,7 +25,7 @@ fn get_current_weather(_args: GetCurrentWeatherArgs) -> String {
 }
 
 pub async fn stream(mut llm: impl LLM) {
-    llm.register_tool(GetCurrentWeather);
+    llm.register_tool(Box::new(GetCurrentWeather));
     let mut stream = llm
         .chat_completion_stream(
             vec![

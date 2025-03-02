@@ -32,23 +32,23 @@ pub enum OllamaError {
 impl LLMProviderError for OllamaError {}
 
 #[derive(Debug)]
-pub struct Ollama<'a> {
-    base_url: &'a str,
+pub struct Ollama {
+    base_url: String,
     pub model: Option<OllamaModel>,
     pub tools: Vec<Box<dyn Tool>>,
 }
 
-impl Default for Ollama<'_> {
+impl Default for Ollama {
     fn default() -> Self {
         Self {
-            base_url: "http://localhost:11434",
+            base_url: "http://localhost:11434".into(),
             model: Some(OllamaModel::DeepSeekR18B),
             tools: vec![],
         }
     }
 }
 
-impl<'a> Ollama<'a> {
+impl Ollama {
     pub fn new() -> Self {
         Default::default()
     }
@@ -64,23 +64,30 @@ impl<'a> Ollama<'a> {
         Ok(self.base_url.to_string())
     }
 
-    pub fn with_base_url(mut self, base_url: &'a str) -> Self {
-        self.base_url = base_url;
+    pub fn set_base_url<T: Into<String>>(mut self, base_url: T) -> Self {
+        self.base_url = base_url.into();
         self
     }
 
-    pub fn with_model(mut self, model: OllamaModel) -> Self {
+    pub fn set_model(mut self, model: OllamaModel) -> Self {
         self.model = Some(model);
         self
     }
 }
 
 #[async_trait]
-impl<'a> LLM for Ollama<'a> {
+impl LLM for Ollama {
     type Error = OllamaError;
 
-    fn name(&self) -> &'a str {
+    fn name(&self) -> &'static str {
         "Ollama"
+    }
+
+    fn supports_tools(&self) -> bool {
+        if let Some(ref model) = self.model {
+            return model.supports_tools();
+        }
+        false
     }
 
     async fn text_generation(
@@ -313,7 +320,7 @@ impl<'a> LLM for Ollama<'a> {
         &self.tools
     }
 
-    fn register_tool(&mut self, tool: impl Tool + 'static) {
-        self.tools.push(Box::new(tool));
+    fn register_tool(&mut self, tool: Box<dyn Tool>) {
+        self.tools.push(tool);
     }
 }

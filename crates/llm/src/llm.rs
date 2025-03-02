@@ -7,8 +7,10 @@ use std::fmt::Display;
 use strum::EnumString;
 
 #[async_trait]
-pub trait LLM: Send + Sync {
+pub trait LLM: Send + Sync + Sized {
     type Error: LLMProviderError + std::error::Error + Send + Sync + 'static;
+
+    fn supports_tools(&self) -> bool;
 
     async fn text_generation(
         &self,
@@ -48,7 +50,7 @@ pub trait LLM: Send + Sync {
 
     fn tools(&self) -> &Vec<Box<dyn Tool>>;
 
-    fn register_tool(&mut self, tool: impl Tool + 'static);
+    fn register_tool(&mut self, tool: Box<dyn Tool>);
 
     /// A helper method to call a tool by name with JSON arguments.
     fn call_tool(&self, tool_name: &str, args: Value) -> Option<Value> {

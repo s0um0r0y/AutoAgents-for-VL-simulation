@@ -12,3 +12,9 @@ pub enum OllamaModel {
     #[strum(serialize = "qwen2.5:32b")]
     Qwen2_5_32B,
 }
+
+impl OllamaModel {
+    pub fn supports_tools(&self) -> bool {
+        matches!(&self, OllamaModel::Qwen2_5_32B | OllamaModel::Llama3_2)
+    }
+}
