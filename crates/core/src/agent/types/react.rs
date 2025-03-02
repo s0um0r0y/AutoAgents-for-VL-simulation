@@ -9,6 +9,8 @@ Your process is as follows:
 2. If you need to perform any specific actions use tools provided to you.
 3. After receiving the results from your action, integrate the observations into your ongoing reasoning.
 4. Continue this iterative process until you are ready to provide a comprehensive final answer.
+
+IMPORTANT
 When you are ready to deliver your final answer, begin your response with "FINAL:
 "#;
 
@@ -32,10 +34,10 @@ where
                 role: ChatRole::System,
                 content: REACT_PROMPT.into(),
             },
-            ChatMessage {
-                role: ChatRole::System,
-                content: self.description().to_string(),
-            },
+            // ChatMessage {
+            //     role: ChatRole::System,
+            //     content: self.description().to_string(),
+            // },
             ChatMessage {
                 role: ChatRole::User,
                 content: prompt.into(),
@@ -43,12 +45,14 @@ where
         ];
 
         loop {
+            println!("In Loop Calling: {:?}", messages);
             let response = self
                 .inner
                 .chat_completion(self.llm, messages.clone())
                 .await
                 .unwrap();
             let response_string = response.clone().message.content;
+            println!("REsponse in loop {:?}", response);
 
             // If the response starts with "FINAL:" or there's no action, consider it the final answer.
             if response_string.starts_with("FINAL:") {
@@ -67,7 +71,11 @@ where
                         // Append the observation from the tool call to the conversation history.
                         messages.push(ChatMessage {
                             role: ChatRole::Tool,
-                            content: format!("Observation: {}", tool_result.unwrap()),
+                            content: format!(
+                                "Observation From Tool {} \n: {}",
+                                tool.function.name,
+                                tool_result.unwrap()
+                            ),
                         });
                     }
                 }

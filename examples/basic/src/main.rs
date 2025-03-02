@@ -25,7 +25,7 @@ struct Args {
 #[tokio::main]
 async fn main() {
     let args = Args::parse();
-    let llm = Ollama::new().set_model(OllamaModel::DeepSeekR18B);
+    let llm = Ollama::new().set_model(OllamaModel::Qwen2_5_32B);
     match args.usecase {
         UseCase::Tool => run_tool(llm).await,
         UseCase::Chat => chat::stream(llm).await,

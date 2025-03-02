@@ -66,7 +66,6 @@ fn search_news(args: SearchNewsArgs) -> String {
     let mut response = ureq::get(&url).call().unwrap();
     if response.status() == StatusCode::OK {
         // Deserialize the JSON response into our response struct.
-        // println!("Respnse {:?}", response.body_mut().read_to_string());
         let news_response: Result<NewsApiResponse, _> = response.body_mut().read_json();
         match news_response {
             Ok(resp) => {
@@ -85,23 +84,7 @@ fn search_news(args: SearchNewsArgs) -> String {
                             article.content
                         ));
                     }
-                    let llm = Ollama::new().set_model(OllamaModel::Qwen2_5_32B);
-                    let resp = llm.chat_completion_sync(
-                        vec![
-                            ChatMessage {
-                                role: ChatRole::System,
-                                content:
-                                    "You are an Assistant who can summarize given information into a markdown format"
-                                        .into(),
-                            },
-                            ChatMessage {
-                                role: ChatRole::User,
-                                content: format!("Summarize the below google search data for the query '{}': \n {}", args.query, output),
-                            },
-                        ],
-                        None,
-                    );
-                    resp.unwrap().message.content.to_string()
+                    output
                 }
             }
             Err(e) => format!("Failed to parse news results: {}", e),

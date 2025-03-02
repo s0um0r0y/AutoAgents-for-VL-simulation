@@ -3,7 +3,7 @@ use crate::tools::{news::SearchNews, summarize::SummarizeContent};
 use async_trait::async_trait;
 use autoagents::{
     agent::{types::ReActAgentT, Agent, AgentDeriveT, AgentT},
-    llm::{ChatMessage, ChatRole, TextGenerationOptions, LLM},
+    llm::{ChatCompletionResponse, ChatMessage, ChatRole, TextGenerationOptions, LLM},
     providers::ollama::{model::OllamaModel, Ollama},
     tool::{Tool, ToolInputT},
 };
@@ -19,7 +19,7 @@ struct AgentOutput {}
 #[agent(
     name = "test_agent",
     description = "An AI research assistant skilled in summarizing News Articles. Your goal is to gather and summarize recent News Articles using a ReAct approach."
-    tools = [SearchNews, SummarizeContent])
+    tools = [SearchNews])
 ]
 pub struct TestAgent {}
 
@@ -28,26 +28,16 @@ impl AgentT for TestAgent {
     type Err = Error;
     type Output = String;
 
-    async fn call<T: LLM>(&self, llm: &mut T, prompt: &str) -> Result<Self::Output, Self::Err> {
+    async fn call<T: LLM>(
+        &self,
+        llm: &mut T,
+        prompt: &str,
+    ) -> Result<ChatCompletionResponse, T::Error> {
         let messages = vec![ChatMessage {
             role: ChatRole::User,
             content: prompt.into(),
         }];
-        let response = self.chat_completion(llm, messages).await.unwrap();
-        return Ok(response.to_string());
-    }
-}
-
-#[async_trait]
-impl ReActAgentT for TestAgent {
-    async fn step<L: LLM + 'static>(
-        &self,
-        llm: &mut L,
-        messages: Vec<ChatMessage>,
-    ) -> Result<String, Self::Err> {
-        // Each step uses the agent's chat_completion method to produce a new chain-of-thought iteration.
-        let response = self.chat_completion(llm, messages).await.unwrap();
-        Ok(response.to_string())
+        self.chat_completion(llm, messages).await
     }
 }
 
@@ -56,7 +46,7 @@ pub async fn agent(mut llm: impl LLM + 'static) {
     println!("Agent Name: {}", agent.name());
     println!("Agent Description: {}", agent.description());
     let response = agent
-        .run_react("What is latest summarized news on AI Research")
+        .run("What is latest news on AI Research")
         .await
         .unwrap();
     println!("Response: {}", response);
