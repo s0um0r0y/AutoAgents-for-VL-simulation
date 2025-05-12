@@ -50,7 +50,7 @@ impl<'a, T: AgentDeriveT + AgentT, L: LLM> Agent<'a, T, L> {
         match message.message.role {
             ChatRole::Assistant => {
                 let tools_call = message.message.tool_calls;
-                for tool in tools_call {
+                if let Some(tool) = tools_call.into_iter().next() {
                     let tool_func = &tool.function;
                     let tool_result = self
                         .llm
@@ -161,8 +161,8 @@ mod test {
         let mut agent = Agent::new(TestAgent {}, &mut llm).unwrap();
         assert_eq!("basic_agent_1", agent.name());
         assert_eq!("hello", agent.description());
-        let val: AgentOutput = serde_json::from_str("{}").unwrap();
-        let agent_out = agent.run("Hello").await.unwrap();
+        let _val: AgentOutput = serde_json::from_str("{}").unwrap();
+        let _agent_out = agent.run("Hello").await.unwrap();
         // assert_eq!(agent_out, val);
     }
 }

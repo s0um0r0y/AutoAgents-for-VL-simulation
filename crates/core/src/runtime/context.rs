@@ -1,11 +1,9 @@
-use crate::llm::LLMConfig;
-
 pub struct LLMContext {
-    config: LLMConfig,
+    config: String,
 }
 
 impl LLMContext {
-    pub fn new(config: LLMConfig) -> Self {
+    pub fn new(config: String) -> Self {
         Self { config }
     }
 }

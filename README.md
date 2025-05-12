@@ -125,7 +125,9 @@ async fn main() {
 
 ## TODO
 - [x] [REFACTOR] Refactor the Derive crate with more robust implementation
-- [ ] [FEATURE] Add Agent with tools and Agent Description
+- [x] [FEATURE] Add Agent with tools and Agent Description
+- [ ] [FEATURE] Add Protocol for App interaction
+- [ ] [FEATURE] Add ReAct Agent type
 - [ ] [FEATURE] Async Tools
 - [ ] [REFACTOR] Refactor the Provider implementation where, Provider needs to do as little implemetation as possible,
   i.e take up the heavy lifting
