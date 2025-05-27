@@ -126,6 +126,7 @@ async fn main() {
 ## TODO
 - [ ] [FEATURE] Refactor LLM Crate to be similar to LiteLLM
 - [ ] [FEATURE] Add Cost Tracking in LLM Crate
+- [ ] [REFACTOR] Seperate out embeddings into embeddings provider
 - [ ] [REFACTOR] Unified interface for LLMProvider
 - [ ] [REFACTOR] Proper implemetation of streaming and HTTP requests
 - [ ] [FEATURE] Add Protocol for App interaction
