@@ -124,8 +124,10 @@ async fn main() {
 ```
 
 ## TODO
-- [x] [REFACTOR] Refactor the Derive crate with more robust implementation
-- [x] [FEATURE] Add Agent with tools and Agent Description
+- [ ] [FEATURE] Refactor LLM Crate to be similar to LiteLLM
+- [ ] [FEATURE] Add Cost Tracking in LLM Crate
+- [ ] [REFACTOR] Unified interface for LLMProvider
+- [ ] [REFACTOR] Proper implemetation of streaming and HTTP requests
 - [ ] [FEATURE] Add Protocol for App interaction
 - [ ] [FEATURE] Add ReAct Agent type
 - [ ] [FEATURE] Async Tools
@@ -134,3 +136,5 @@ async fn main() {
 - [ ] [REFACTOR] Add OpenAI Request and Response Which Other providers can directly reuse as it is most widley used
 - [ ] [FEATURE] Add a basic Single Threaded Actor Model
 - [ ] [COVERAGE] Add tests
+- [x] [REFACTOR] Refactor the Derive crate with more robust implementation
+- [x] [FEATURE] Add Agent with tools and Agent Description

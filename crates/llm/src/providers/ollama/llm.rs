@@ -1,16 +1,16 @@
 use super::{
     api::OllamaAPI,
-    message::{OllamaGenerateRequest, OllamaTextGenerationOptions, OllamaTool},
+    message::{OllamaGenerateRequest, OllamaTextGenerationOptions, OllamaTool, OllamaChatRequest, OllamaChatCompletionOptions},
     model::OllamaModel,
 };
 use crate::{
+    common::openai_types::{OpenAIStyleChatCompletionResponse, OpenAIStyleFunction},
     error::{LLMError, LLMProviderError},
     llm::{
-        ChatCompletionOptions, ChatCompletionResponse, ChatMessage, TextGenerationOptions,
-        TextGenerationResponse, LLM,
+        ChatCompletionOptions, ChatCompletionResponse, ChatMessage, ChatResponseMessage, ChatRole,
+        TextGenerationOptions, TextGenerationResponse, ToolCallFunction, ToolCallRequest, LLM,
     },
     net::http_request::HTTPRequest,
-    providers::ollama::message::{OllamaChatCompletionOptions, OllamaChatRequest, OllamaFunction},
     tool::Tool,
     utils,
 };
@@ -175,9 +175,8 @@ impl LLM for Ollama {
         let model = self.model()?;
         let base_url = self.base_url()?;
         let options: OllamaChatCompletionOptions = options.unwrap_or_default().into();
-        let mut body = OllamaChatRequest::from_chat_messages(messages)
-            .set_model(model)
-            .set_options(options);
+        let mut body = OllamaChatRequest::from_chat_messages(messages, model)
+            .set_ollama_options(options.into());
 
         // Add any registered tools from the LLM into the chat request.
         if !self.tools.is_empty() {
@@ -185,8 +184,8 @@ impl LLM for Ollama {
                 .tools
                 .iter()
                 .map(|tool| OllamaTool {
-                    _type: "function".into(),
-                    function: OllamaFunction {
+                    tool_type: "function".into(),
+                    function: OpenAIStyleFunction {
                         name: tool.name().to_string(),
                         description: tool.description().to_string(),
                         parameters: tool.args_schema(),
@@ -201,10 +200,47 @@ impl LLM for Ollama {
             .await
             .map_err(|e| OllamaError::Api(e.to_string()))?;
 
-        let ollama_response: ChatCompletionResponse =
+        let ollama_response: OpenAIStyleChatCompletionResponse =
             serde_json::from_str(&text).map_err(|e| OllamaError::Parsing(e.to_string()))?;
 
-        Ok(ollama_response)
+        // Convert OpenAI-style response to our common format
+        let choice = ollama_response.choices.first()
+            .ok_or_else(|| OllamaError::Parsing("No choices in response".to_string()))?;
+
+        let tool_calls = choice.message.tool_calls.iter().map(|tc| {
+            ToolCallRequest {
+                function: ToolCallFunction {
+                    name: tc.function.name.clone(),
+                    arguments: serde_json::from_str(&tc.function.arguments).unwrap_or(serde_json::Value::Object(serde_json::Map::new())),
+                },
+            }
+        }).collect();
+
+        let response = ChatCompletionResponse {
+            model: ollama_response.model,
+            created_at: ollama_response.created.to_string(),
+            message: ChatResponseMessage {
+                role: match choice.message.role.as_str() {
+                    "system" => ChatRole::System,
+                    "user" => ChatRole::User,
+                    "assistant" => ChatRole::Assistant,
+                    "tool" => ChatRole::Tool,
+                    _ => ChatRole::Assistant,
+                },
+                content: choice.message.content.clone().unwrap_or_default(),
+                tool_calls,
+            },
+            done: choice.finish_reason.is_some(),
+            done_reason: choice.finish_reason.clone().unwrap_or_default(),
+            total_duration: 0,
+            load_duration: 0,
+            prompt_eval_count: 0,
+            prompt_eval_duration: 0,
+            eval_count: 0,
+            eval_duration: 0,
+        };
+
+        Ok(response)
     }
 
     fn chat_completion_sync(
@@ -215,9 +251,8 @@ impl LLM for Ollama {
         let model = self.model()?;
         let base_url = self.base_url()?;
         let options: OllamaChatCompletionOptions = options.unwrap_or_default().into();
-        let mut body = OllamaChatRequest::from_chat_messages(messages)
-            .set_model(model)
-            .set_options(options);
+        let mut body = OllamaChatRequest::from_chat_messages(messages, model)
+            .set_ollama_options(options.into());
 
         // Add any registered tools from the LLM into the chat request.
         if !self.tools.is_empty() {
@@ -225,8 +260,8 @@ impl LLM for Ollama {
                 .tools
                 .iter()
                 .map(|tool| OllamaTool {
-                    _type: "function".into(),
-                    function: OllamaFunction {
+                    tool_type: "function".into(),
+                    function: OpenAIStyleFunction {
                         name: tool.name().to_string(),
                         description: tool.description().to_string(),
                         parameters: tool.args_schema(),
@@ -240,10 +275,47 @@ impl LLM for Ollama {
         let text = HTTPRequest::request_sync(&url, serde_json::json!(body))
             .map_err(|e| OllamaError::Api(e.to_string()))?;
 
-        let ollama_response: ChatCompletionResponse =
+        let ollama_response: OpenAIStyleChatCompletionResponse =
             serde_json::from_str(&text).map_err(|e| OllamaError::Parsing(e.to_string()))?;
 
-        Ok(ollama_response)
+        // Convert OpenAI-style response to our common format
+        let choice = ollama_response.choices.first()
+            .ok_or_else(|| OllamaError::Parsing("No choices in response".to_string()))?;
+
+        let tool_calls = choice.message.tool_calls.iter().map(|tc| {
+            ToolCallRequest {
+                function: ToolCallFunction {
+                    name: tc.function.name.clone(),
+                    arguments: serde_json::from_str(&tc.function.arguments).unwrap_or(serde_json::Value::Object(serde_json::Map::new())),
+                },
+            }
+        }).collect();
+
+        let response = ChatCompletionResponse {
+            model: ollama_response.model,
+            created_at: ollama_response.created.to_string(),
+            message: ChatResponseMessage {
+                role: match choice.message.role.as_str() {
+                    "system" => ChatRole::System,
+                    "user" => ChatRole::User,
+                    "assistant" => ChatRole::Assistant,
+                    "tool" => ChatRole::Tool,
+                    _ => ChatRole::Assistant,
+                },
+                content: choice.message.content.clone().unwrap_or_default(),
+                tool_calls,
+            },
+            done: choice.finish_reason.is_some(),
+            done_reason: choice.finish_reason.clone().unwrap_or_default(),
+            total_duration: 0,
+            load_duration: 0,
+            prompt_eval_count: 0,
+            prompt_eval_duration: 0,
+            eval_count: 0,
+            eval_duration: 0,
+        };
+
+        Ok(response)
     }
 
     async fn chat_completion_stream(
@@ -261,10 +333,9 @@ impl LLM for Ollama {
         };
 
         let options: OllamaChatCompletionOptions = options.unwrap_or_default().into();
-        let mut body = OllamaChatRequest::from_chat_messages(messages)
-            .set_model(model)
+        let mut body = OllamaChatRequest::from_chat_messages(messages, model)
             .set_stream(true)
-            .set_options(options);
+            .set_ollama_options(options.into());
 
         // Add any registered tools from the LLM into the chat request.
         if !self.tools.is_empty() {
@@ -272,8 +343,8 @@ impl LLM for Ollama {
                 .tools
                 .iter()
                 .map(|tool| OllamaTool {
-                    _type: "function".into(),
-                    function: OllamaFunction {
+                    tool_type: "function".into(),
+                    function: OpenAIStyleFunction {
                         name: tool.name().to_string(),
                         description: tool.description().to_string(),
                         parameters: tool.args_schema(),

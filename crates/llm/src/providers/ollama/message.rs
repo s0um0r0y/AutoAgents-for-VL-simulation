@@ -1,5 +1,9 @@
 use super::model::OllamaModel;
-use crate::llm::{ChatCompletionOptions, ChatMessage, ChatRole, TextGenerationOptions};
+use crate::common::openai_types::{
+    OpenAIStyleChatCompletionOptions, OpenAIStyleChatCompletionRequest, 
+    OpenAIStyleTool
+};
+use crate::llm::{ChatCompletionOptions, TextGenerationOptions};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -15,29 +19,45 @@ impl From<TextGenerationOptions> for OllamaTextGenerationOptions {
     }
 }
 
-macro_rules! common_setters_for_request {
-    () => {
-        pub fn set_model(mut self, model: String) -> Self {
-            self.model = model;
-            self
-        }
-
-        pub fn set_stream(mut self, stream: bool) -> Self {
-            self.stream = Some(stream);
-            self
-        }
-
-        pub fn set_format(mut self, format: String) -> Self {
-            self.format = Some(format);
-            self
-        }
-
-        pub fn set_keep_alive(mut self, keep_alive: String) -> Self {
-            self.keep_alive = Some(keep_alive);
-            self
-        }
-    };
+// Ollama-specific options that convert from OpenAI-style options
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct OllamaChatCompletionOptions {
+    num_predict: i32,
 }
+
+impl From<ChatCompletionOptions> for OllamaChatCompletionOptions {
+    fn from(value: ChatCompletionOptions) -> Self {
+        Self {
+            num_predict: value.num_tokens,
+        }
+    }
+}
+
+impl From<OllamaChatCompletionOptions> for OpenAIStyleChatCompletionOptions {
+    fn from(value: OllamaChatCompletionOptions) -> Self {
+        Self {
+            max_tokens: Some(value.num_predict),
+            temperature: Some(0.7),
+            top_p: Some(1.0),
+            frequency_penalty: Some(0.0),
+            presence_penalty: Some(0.0),
+        }
+    }
+}
+
+impl From<OpenAIStyleChatCompletionOptions> for OllamaChatCompletionOptions {
+    fn from(value: OpenAIStyleChatCompletionOptions) -> Self {
+        Self {
+            num_predict: value.max_tokens.unwrap_or(1024),
+        }
+    }
+}
+
+// Use common OpenAI-style request but add Ollama-specific fields
+pub type OllamaChatRequest = OpenAIStyleChatCompletionRequest;
+
+// Ollama-specific tool type that maps to OpenAI-style
+pub type OllamaTool = OpenAIStyleTool;
 
 #[allow(dead_code)]
 #[derive(Debug, Serialize, Deserialize)]
@@ -69,7 +89,25 @@ impl Default for OllamaGenerateRequest {
 
 #[allow(dead_code)]
 impl OllamaGenerateRequest {
-    common_setters_for_request!();
+    pub fn set_model(mut self, model: String) -> Self {
+        self.model = model;
+        self
+    }
+
+    pub fn set_stream(mut self, stream: bool) -> Self {
+        self.stream = Some(stream);
+        self
+    }
+
+    pub fn set_format(mut self, format: String) -> Self {
+        self.format = Some(format);
+        self
+    }
+
+    pub fn set_keep_alive(mut self, keep_alive: String) -> Self {
+        self.keep_alive = Some(keep_alive);
+        self
+    }
 
     pub fn set_options(mut self, options: OllamaTextGenerationOptions) -> Self {
         self.options = Some(options);
@@ -87,119 +125,20 @@ impl OllamaGenerateRequest {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
-pub struct OllamaChatCompletionOptions {
-    num_predict: i32,
-}
-
-impl From<ChatCompletionOptions> for OllamaChatCompletionOptions {
-    fn from(value: ChatCompletionOptions) -> Self {
-        Self {
-            num_predict: value.num_tokens,
-        }
-    }
-}
-
-#[allow(dead_code)]
-#[derive(Debug, Serialize, Deserialize)]
-pub struct OllamaChatMessage {
-    pub role: ChatRole,
-    pub content: String,
-    pub images: Option<Vec<String>>,
-    pub tool_calls: Option<Vec<String>>,
-}
-
-impl From<ChatMessage> for OllamaChatMessage {
-    fn from(value: ChatMessage) -> Self {
-        Self {
-            role: value.role,
-            content: value.content,
-            images: None,
-            tool_calls: None,
-        }
-    }
-}
-
-#[derive(Debug, Serialize, Deserialize, Default)]
-pub struct OllamaChatMessages(pub Vec<OllamaChatMessage>);
-
-impl From<Vec<ChatMessage>> for OllamaChatMessages {
-    fn from(value: Vec<ChatMessage>) -> Self {
-        let messages = value.into_iter().map(OllamaChatMessage::from).collect();
-        OllamaChatMessages(messages)
-    }
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct OllamaTool {
-    #[serde(rename = "type")]
-    pub _type: String,
-    pub function: OllamaFunction,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct OllamaFunction {
-    pub name: String,
-    pub description: String,
-    pub parameters: serde_json::Value, // You can further define a struct if you want a stricter schema.
-}
-
-#[allow(dead_code)]
-#[derive(Debug, Serialize, Deserialize)]
-pub struct OllamaChatRequest {
-    pub model: String,
-    pub messages: OllamaChatMessages,
-    pub tools: Option<Vec<OllamaTool>>,
-    pub format: Option<String>,
-    pub stream: Option<bool>,
-    pub keep_alive: Option<String>,
-    pub options: Option<OllamaChatCompletionOptions>,
-}
-
-impl Default for OllamaChatRequest {
-    fn default() -> Self {
-        Self {
-            model: OllamaModel::DeepSeekR18B.to_string(),
-            messages: OllamaChatMessages::default(),
-            tools: None,
-            stream: Some(false),
-            format: None,
-            keep_alive: Some("5m".to_string()),
-            options: Some(OllamaChatCompletionOptions::default()),
-        }
-    }
-}
-
-#[allow(dead_code)]
+// Helper functions for Ollama-specific functionality
 impl OllamaChatRequest {
-    common_setters_for_request!();
-
-    pub fn set_messages<A: Into<OllamaChatMessages>>(mut self, messages: A) -> Self {
-        self.messages = messages.into();
+    pub fn set_ollama_options(mut self, options: OpenAIStyleChatCompletionOptions) -> Self {
+        // Since we're using the OpenAI-style request, we need to map num_predict to max_tokens
+        self.max_tokens = options.max_tokens;
+        self.temperature = options.temperature;
+        self.top_p = options.top_p;
+        self.frequency_penalty = options.frequency_penalty;
+        self.presence_penalty = options.presence_penalty;
         self
     }
 
-    pub fn set_tools(mut self, tools: Vec<OllamaTool>) -> Self {
-        self.tools = Some(tools);
-        self
-    }
-
-    pub fn set_options(mut self, options: OllamaChatCompletionOptions) -> Self {
-        self.options = Some(options);
-        self
-    }
-
-    pub fn from_chat_messages(messages: Vec<ChatMessage>) -> Self {
-        let ollama_messages: Vec<OllamaChatMessage> = messages
-            .iter()
-            .cloned()
-            .map(OllamaChatMessage::from)
-            .collect();
-
-        Self {
-            messages: OllamaChatMessages(ollama_messages),
-            tools: None,
-            ..Default::default()
-        }
+    pub fn with_ollama_defaults(model: String) -> Self {
+        OpenAIStyleChatCompletionRequest::new(model)
+            .set_keep_alive("5m".to_string())
     }
 }
