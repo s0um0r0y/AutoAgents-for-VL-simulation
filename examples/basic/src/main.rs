@@ -1,14 +1,9 @@
-use autoagents::providers::{
-    ollama::{model::OllamaModel, Ollama},
-    openai::{model::OpenAIModel, OpenAI},
-};
+use std::sync::Arc;
+
 use clap::{Parser, ValueEnum};
 mod chat;
-mod react;
-mod text_gen;
-mod tools;
-use tools::run_tool;
 mod simple;
+use autoagents::builder::{LLMBackend, LLMBuilder};
 
 #[derive(Debug, Clone, ValueEnum)]
 enum Model {
@@ -18,53 +13,35 @@ enum Model {
 
 #[derive(Debug, Clone, ValueEnum)]
 enum UseCase {
-    Chat,
-    Tool,
     Simple,
-    TextGen,
-    React,
 }
 
 /// Simple program to demonstrate AutoAgents functionality
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
 struct Args {
-    #[arg(short, long, help = "Use case to run")]
+    #[arg(short, long, help = "usecase")]
     usecase: UseCase,
-    #[arg(short, long, help = "LLM Model")]
-    model: Model,
 }
 
 #[tokio::main]
 async fn main() {
     let args = Args::parse();
     // Check if API key is set
-    if std::env::var("OPENAI_API_KEY").is_err() {
-        eprintln!("❌ Error: OPENAI_API_KEY environment variable not set");
-        eprintln!("💡 Please set your OpenAI API key: export OPENAI_API_KEY=your_key_here");
-        std::process::exit(1);
-    }
+    let api_key = std::env::var("OPENAI_API_KEY").unwrap_or("".into());
 
-    match args.model {
-        Model::OpenAI => {
-            let llm = OpenAI::new().set_model(OpenAIModel::GPT4);
-            match args.usecase {
-                UseCase::Tool => run_tool(llm).await,
-                UseCase::Chat => chat::stream(llm).await,
-                UseCase::TextGen => text_gen::text_gen(llm).await,
-                UseCase::React => react::react_agent(llm).await,
-                UseCase::Simple => simple::simple_agent(llm).await,
-            }
-        }
-        Model::Ollama => {
-            let llm = Ollama::new().set_model(OllamaModel::Qwen2_5_14B);
-            match args.usecase {
-                UseCase::Tool => run_tool(llm).await,
-                UseCase::Chat => chat::stream(llm).await,
-                UseCase::TextGen => text_gen::text_gen(llm).await,
-                UseCase::React => react::react_agent(llm).await,
-                UseCase::Simple => simple::simple_agent(llm).await,
-            }
-        }
+    // Initialize and configure the LLM client
+    let llm = LLMBuilder::new()
+        .backend(LLMBackend::OpenAI) // Use OpenAI as the LLM provider
+        .api_key(api_key) // Set the API key
+        .model("gpt-4o") // Use GPT-4o-mini model
+        .max_tokens(512) // Limit response length
+        .temperature(0.2) // Control response randomness (0.0-1.0)
+        .stream(false) // Disable streaming responses
+        .build()
+        .expect("Failed to build LLM");
+    let llm = Arc::new(llm);
+    match args.usecase {
+        UseCase::Simple => simple::simple_agent(llm).await,
     }
 }

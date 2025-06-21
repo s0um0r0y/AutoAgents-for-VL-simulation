@@ -3,7 +3,8 @@ use crate::agent::executor::AgentExecutor;
 use crate::agent::runnable::{RunnableAgent, RunnableAgentBuilder};
 use crate::error::SessionError;
 use crate::protocol::{AgentID, Event, SessionId, SubmissionId};
-use autoagents_llm::llm::{ChatMessage, LLM};
+use autoagents_llm::chat::ChatMessage;
+use autoagents_llm::LLMProvider;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
@@ -185,20 +186,24 @@ impl Session {
     }
 
     /// Register an agent with a specific ID
-    pub fn register_agent_with_id<E, L>(&mut self, agent_id: Uuid, agent: BaseAgent<E>, llm: L)
+    pub fn register_agent_with_id<E>(&mut self, agent_id: Uuid, agent: BaseAgent<E>)
     where
         E: AgentExecutor + Clone + Send + Sync + 'static,
         E::Output: Into<Value> + Send,
         E::Error: std::error::Error + Send + Sync + 'static,
-        L: LLM + Clone + Send + Sync + 'static,
     {
-        let builder = RunnableAgentBuilder::new(llm);
+        let builder = RunnableAgentBuilder::new();
         let runnable_agent = builder.build(agent);
         self.agents.insert(agent_id, runnable_agent);
     }
 
     /// Run a specific task
-    pub async fn run_task(&mut self, task: Task, agent_id: AgentID) -> Result<Value, SessionError> {
+    pub async fn run_task(
+        &mut self,
+        task: Task,
+        agent_id: AgentID,
+        llm: Arc<Box<dyn LLMProvider>>,
+    ) -> Result<Value, SessionError> {
         // Get the agent
         let agent = self
             .agents
@@ -209,28 +214,36 @@ impl Session {
         // Run the agent
         // TODO - Add JoinHandle to the queue to  handle them, Currently one task is processed at a time
         agent
-            .spawn_task(self.clone(), task, self.tx_event.clone())
+            .spawn_task(self.clone(), task, llm, self.tx_event.clone())
             .await
             .unwrap()
             .map_err(|e| SessionError::TaskExecutionFailed(e.to_string()))
     }
 
     /// Run the next pending task for an agent
-    pub async fn run(&mut self, agent_id: Uuid) -> Result<Value, SessionError> {
+    pub async fn run(
+        &mut self,
+        agent_id: Uuid,
+        llm: Arc<Box<dyn LLMProvider>>,
+    ) -> Result<Value, SessionError> {
         if let Some(task) = self.get_top_task() {
-            self.run_task(task, agent_id).await
+            self.run_task(task, agent_id, llm).await
         } else {
             return Err(SessionError::NoTaskSet(agent_id));
         }
     }
 
     /// Run all pending tasks for an agent
-    pub async fn run_all(&mut self, agent_id: Uuid) -> Result<Vec<Value>, SessionError> {
+    pub async fn run_all(
+        &mut self,
+        agent_id: Uuid,
+        llm: Arc<Box<dyn LLMProvider>>,
+    ) -> Result<Vec<Value>, SessionError> {
         let mut results = Vec::new();
 
         // Keep running until no more tasks
         while !self.is_task_queue_empty() {
-            let result = self.run(agent_id).await?;
+            let result = self.run(agent_id, llm.clone()).await?;
             results.push(result);
         }
 

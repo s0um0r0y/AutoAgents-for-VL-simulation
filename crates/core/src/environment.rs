@@ -2,7 +2,7 @@ use crate::agent::base::BaseAgent;
 use crate::agent::executor::AgentExecutor;
 use crate::protocol::{AgentID, Event, SessionId, SubmissionId};
 use crate::session::{Session, SessionManager, Task};
-use autoagents_llm::llm::LLM;
+use autoagents_llm::LLMProvider;
 use serde_json::Value;
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -56,9 +56,9 @@ pub struct TaskHandle {
 }
 
 /// Environment for managing agents and their execution
-pub struct Environment<L: LLM + Clone + 'static> {
+pub struct Environment {
     config: EnvironmentConfig,
-    llm: Arc<L>,
+    llm: Arc<Box<dyn LLMProvider>>,
     tx_event: mpsc::Sender<Event>,
     rx_event: Option<mpsc::Receiver<Event>>,
     sessions: HashMap<SessionId, Session>,
@@ -66,9 +66,9 @@ pub struct Environment<L: LLM + Clone + 'static> {
     event_handler: Option<JoinHandle<()>>,
 }
 
-impl<L: LLM + Clone + 'static> Environment<L> {
+impl Environment {
     /// Create a new Environment with the given LLM and configuration
-    pub fn new(llm: L, config: Option<EnvironmentConfig>) -> Self {
+    pub fn new(llm: Arc<Box<dyn LLMProvider>>, config: Option<EnvironmentConfig>) -> Self {
         let config = config.unwrap_or_default();
         let cwd = config.clone().working_dir;
         let (tx_event, rx_event) = mpsc::channel(config.channel_buffer);
@@ -79,7 +79,7 @@ impl<L: LLM + Clone + 'static> Environment<L> {
         sessions.insert(session_id, session);
         Self {
             config,
-            llm: Arc::new(llm),
+            llm,
             tx_event,
             rx_event: Some(rx_event),
             sessions,
@@ -120,9 +120,8 @@ impl<L: LLM + Clone + 'static> Environment<L> {
         E::Error: std::error::Error + Send + Sync + 'static,
     {
         let agent_id = Uuid::new_v4();
-        let llm = self.llm.as_ref().clone();
         let current_session = self.get_session_mut(session_id).unwrap();
-        current_session.register_agent_with_id(agent_id, agent, llm);
+        current_session.register_agent_with_id(agent_id, agent);
         agent_id
     }
 
@@ -137,9 +136,8 @@ impl<L: LLM + Clone + 'static> Environment<L> {
         E::Output: Into<Value> + Send,
         E::Error: std::error::Error + Send + Sync + 'static,
     {
-        let llm = self.llm.as_ref().clone();
         let current_session = self.get_session_mut(session_id).unwrap();
-        current_session.register_agent_with_id(agent_id, agent, llm);
+        current_session.register_agent_with_id(agent_id, agent);
     }
 
     /// Add a task to be executed by a specific agent
@@ -165,13 +163,14 @@ impl<L: LLM + Clone + 'static> Environment<L> {
         sub_id: SubmissionId,
         session_id: Option<SessionId>,
     ) -> Result<Value, EnvironmentError> {
+        let llm = self.llm.clone();
         let current_session = self.get_session_mut(session_id).unwrap();
         let task = current_session.get_task(sub_id);
         if task.is_none() {
             return Err(EnvironmentError::NoTaskSet(sub_id));
         }
         current_session
-            .run_task(task.unwrap(), agent_id)
+            .run_task(task.unwrap(), agent_id, llm)
             .await
             .map_err(|e| EnvironmentError::RuntimeError(e.to_string()))
     }
@@ -182,9 +181,10 @@ impl<L: LLM + Clone + 'static> Environment<L> {
         agent_id: AgentID,
         session_id: Option<SessionId>,
     ) -> Result<Value, EnvironmentError> {
+        let llm = self.llm.clone();
         let current_session = self.get_session_mut(session_id).unwrap();
         current_session
-            .run(agent_id)
+            .run(agent_id, llm)
             .await
             .map_err(|e| EnvironmentError::RuntimeError(e.to_string()))
     }
@@ -195,9 +195,10 @@ impl<L: LLM + Clone + 'static> Environment<L> {
         agent_id: AgentID,
         session_id: Option<SessionId>,
     ) -> Result<Vec<Value>, EnvironmentError> {
+        let llm = self.llm.clone();
         let current_session = self.get_session_mut(session_id).unwrap();
         current_session
-            .run_all(agent_id)
+            .run_all(agent_id, llm)
             .await
             .map_err(|e| EnvironmentError::RuntimeError(e.to_string()))
     }

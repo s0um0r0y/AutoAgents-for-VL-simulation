@@ -1,7 +1,9 @@
 use serde_json::Value;
-use std::fmt::Debug;
+use std::{fmt::Debug, sync::Arc};
 
-pub trait Tool: Send + Sync + Debug {
+use crate::chat::{FunctionTool, Tool};
+
+pub trait ToolT: Send + Sync + Debug {
     /// The name of the tool.
     fn name(&self) -> &'static str;
     /// A description explaining the tool’s purpose.
@@ -14,4 +16,17 @@ pub trait Tool: Send + Sync + Debug {
 
 pub trait ToolInputT {
     fn io_schema() -> &'static str;
+}
+
+impl From<&Arc<Box<dyn ToolT>>> for Tool {
+    fn from(tool: &Arc<Box<dyn ToolT>>) -> Self {
+        Tool {
+            tool_type: "function".to_string(),
+            function: FunctionTool {
+                name: tool.name().to_string(),
+                description: tool.description().to_string(),
+                parameters: tool.args_schema(),
+            },
+        }
+    }
 }

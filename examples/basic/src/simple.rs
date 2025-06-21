@@ -2,12 +2,11 @@ use autoagents::agent::base::AgentDeriveT;
 use autoagents::agent::types::SimpleAgentBuilder;
 use autoagents::environment::Environment;
 use autoagents::protocol::Event;
-use autoagents::tool::Tool;
-use autoagents::tool::ToolInputT;
+use autoagents::{LLMProvider, ToolInputT, ToolT};
 use autoagents_derive::{agent, tool, ToolInput};
-use autoagents_llm::llm::LLM;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::sync::Arc;
 use tokio::sync::mpsc::Receiver;
 
 #[derive(Serialize, Deserialize, ToolInput, Debug)]
@@ -29,7 +28,7 @@ fn get_weather(args: WeatherArgs) -> String {
     description = "You are general assistant and will answer user quesries in crips manner.",
     tools = [WeatherTool]
 )]
-pub struct MathAgent {}
+pub struct WeatherAgent {}
 
 fn handle_events(mut event_receiver: Receiver<Event>) {
     tokio::spawn(async move {
@@ -39,11 +38,11 @@ fn handle_events(mut event_receiver: Receiver<Event>) {
     });
 }
 
-pub async fn simple_agent(llm: impl LLM + Clone + 'static) {
+pub async fn simple_agent(llm: Arc<Box<dyn LLMProvider>>) {
     // Build a Simple agent
     let agent = SimpleAgentBuilder::from_agent(
-        MathAgent {},
-        "You are general assistant and will answer user quesries in crips manner.".into(),
+        WeatherAgent {},
+        "You are general assistant and will answer user quesries in crisp manner.".into(),
     )
     .build();
 

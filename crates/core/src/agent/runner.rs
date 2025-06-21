@@ -1,8 +1,10 @@
+use std::sync::Arc;
+
 use crate::agent::base::BaseAgent;
 use crate::agent::executor::AgentExecutor;
 use crate::protocol::Event;
 use crate::session::{Session, Task};
-use autoagents_llm::llm::LLM;
+use autoagents_llm::LLMProvider;
 use tokio::sync::mpsc;
 
 /// Event-driven agent runner
@@ -17,34 +19,17 @@ impl<E: AgentExecutor + Send + Sync> AgentRunner<E> {
     }
 
     /// Run the agent in an event-driven manner
-    pub async fn run<L: LLM + Clone + 'static>(
+    pub async fn run(
         &self,
-        mut llm: L,
+        llm: Arc<Box<dyn LLMProvider>>,
         mut session: Session,
         task: Task,
     ) -> Result<E::Output, E::Error> {
-        // Register tools with the LLM
-        if let Err(e) = self.agent.register_tools(&mut llm) {
-            let error_msg = e.to_string();
-            let task_result = crate::protocol::TaskResult::Failure(error_msg);
-            let _ = self
-                .tx_event
-                .send(Event::TaskComplete {
-                    sub_id: task.submission_id,
-                    result: task_result,
-                })
-                .await;
-
-            // For now, we'll panic as we don't have a generic way to convert errors
-            // In a real implementation, AgentExecutor::Error should have a way to handle AgentError
-            panic!("Failed to register tools: {}", e);
-        }
-
         // Execute the agent
         let result = self
             .agent
             .executor
-            .execute(&llm, &mut session, task.clone())
+            .execute(llm, &mut session, task.clone())
             .await;
 
         // Send completion event
