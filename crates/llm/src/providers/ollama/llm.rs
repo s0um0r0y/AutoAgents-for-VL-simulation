@@ -1,6 +1,9 @@
 use super::{
     api::OllamaAPI,
-    message::{OllamaGenerateRequest, OllamaTextGenerationOptions, OllamaTool, OllamaChatRequest, OllamaChatCompletionOptions},
+    message::{
+        OllamaChatCompletionOptions, OllamaChatRequest, OllamaGenerateRequest,
+        OllamaTextGenerationOptions, OllamaTool,
+    },
     model::OllamaModel,
 };
 use crate::{
@@ -36,6 +39,16 @@ pub struct Ollama {
     base_url: String,
     pub model: Option<OllamaModel>,
     pub tools: Vec<Box<dyn Tool>>,
+}
+
+impl Clone for Ollama {
+    fn clone(&self) -> Self {
+        Self {
+            base_url: self.base_url.clone(),
+            model: self.model.clone(),
+            tools: vec![], // Tools cannot be cloned, so we start with an empty vec
+        }
+    }
 }
 
 impl Default for Ollama {
@@ -204,17 +217,23 @@ impl LLM for Ollama {
             serde_json::from_str(&text).map_err(|e| OllamaError::Parsing(e.to_string()))?;
 
         // Convert OpenAI-style response to our common format
-        let choice = ollama_response.choices.first()
+        let choice = ollama_response
+            .choices
+            .first()
             .ok_or_else(|| OllamaError::Parsing("No choices in response".to_string()))?;
 
-        let tool_calls = choice.message.tool_calls.iter().map(|tc| {
-            ToolCallRequest {
+        let tool_calls = choice
+            .message
+            .tool_calls
+            .iter()
+            .map(|tc| ToolCallRequest {
                 function: ToolCallFunction {
                     name: tc.function.name.clone(),
-                    arguments: serde_json::from_str(&tc.function.arguments).unwrap_or(serde_json::Value::Object(serde_json::Map::new())),
+                    arguments: serde_json::from_str(&tc.function.arguments)
+                        .unwrap_or(serde_json::Value::Object(serde_json::Map::new())),
                 },
-            }
-        }).collect();
+            })
+            .collect();
 
         let response = ChatCompletionResponse {
             model: ollama_response.model,
@@ -279,17 +298,23 @@ impl LLM for Ollama {
             serde_json::from_str(&text).map_err(|e| OllamaError::Parsing(e.to_string()))?;
 
         // Convert OpenAI-style response to our common format
-        let choice = ollama_response.choices.first()
+        let choice = ollama_response
+            .choices
+            .first()
             .ok_or_else(|| OllamaError::Parsing("No choices in response".to_string()))?;
 
-        let tool_calls = choice.message.tool_calls.iter().map(|tc| {
-            ToolCallRequest {
+        let tool_calls = choice
+            .message
+            .tool_calls
+            .iter()
+            .map(|tc| ToolCallRequest {
                 function: ToolCallFunction {
                     name: tc.function.name.clone(),
-                    arguments: serde_json::from_str(&tc.function.arguments).unwrap_or(serde_json::Value::Object(serde_json::Map::new())),
+                    arguments: serde_json::from_str(&tc.function.arguments)
+                        .unwrap_or(serde_json::Value::Object(serde_json::Map::new())),
                 },
-            }
-        }).collect();
+            })
+            .collect();
 
         let response = ChatCompletionResponse {
             model: ollama_response.model,

@@ -7,7 +7,7 @@ use std::fmt::Display;
 use strum::EnumString;
 
 #[async_trait]
-pub trait LLM: Send + Sync + Sized {
+pub trait LLM: Send + Sync {
     type Error: LLMProviderError + std::error::Error + Send + Sync + 'static;
 
     fn supports_tools(&self) -> bool;

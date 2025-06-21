@@ -1,12 +1,9 @@
-use super::{
-    api::OpenAIAPI,
-    model::OpenAIModel,
-};
+use super::{api::OpenAIAPI, model::OpenAIModel};
 use crate::{
     common::openai_types::{
-        OpenAIStyleChatCompletionOptions, OpenAIStyleChatCompletionRequest, OpenAIStyleChatCompletionResponse,
-        OpenAIStyleFunction, OpenAIStyleStreamResponse, OpenAIStyleTextGenerationOptions, OpenAIStyleTool,
-        parse_openai_style_stream_chunk,
+        parse_openai_style_stream_chunk, OpenAIStyleChatCompletionOptions,
+        OpenAIStyleChatCompletionRequest, OpenAIStyleChatCompletionResponse, OpenAIStyleFunction,
+        OpenAIStyleStreamResponse, OpenAIStyleTextGenerationOptions, OpenAIStyleTool,
     },
     error::{LLMError, LLMProviderError},
     llm::{
@@ -56,6 +53,17 @@ impl Default for OpenAI {
     }
 }
 
+impl Clone for OpenAI {
+    fn clone(&self) -> Self {
+        Self {
+            base_url: self.base_url.clone(),
+            api_key: self.api_key.clone(),
+            model: self.model.clone(),
+            tools: vec![], // Tools cannot be cloned, so we start with an empty vec
+        }
+    }
+}
+
 impl OpenAI {
     pub fn new() -> Self {
         Default::default()
@@ -73,9 +81,7 @@ impl OpenAI {
     }
 
     fn api_key(&self) -> Result<String, OpenAIError> {
-        self.api_key
-            .clone()
-            .ok_or(OpenAIError::Authentication)
+        self.api_key.clone().ok_or(OpenAIError::Authentication)
     }
 
     pub fn set_base_url<T: Into<String>>(mut self, base_url: T) -> Self {
@@ -96,7 +102,7 @@ impl OpenAI {
     async fn make_request(&self, url: &str, body: Value) -> Result<String, OpenAIError> {
         let api_key = self.api_key()?;
         let headers = vec![("Authorization".to_string(), format!("Bearer {}", api_key))];
-        
+
         HTTPRequest::request_with_headers(url, body, headers)
             .await
             .map_err(|e| OpenAIError::Api(e.to_string()))
@@ -105,12 +111,10 @@ impl OpenAI {
     fn make_request_sync(&self, url: &str, body: Value) -> Result<String, OpenAIError> {
         let api_key = self.api_key()?;
         let headers = vec![("Authorization".to_string(), format!("Bearer {}", api_key))];
-        
+
         HTTPRequest::request_sync_with_headers(url, body, headers)
             .map_err(|e| OpenAIError::Api(e.to_string()))
     }
-
-
 }
 
 #[async_trait]
@@ -135,7 +139,7 @@ impl LLM for OpenAI {
         options: Option<TextGenerationOptions>,
     ) -> Result<TextGenerationResponse, Self::Error> {
         let options: OpenAIStyleTextGenerationOptions = options.unwrap_or_default().into();
-        
+
         // For text generation, we'll use the chat completions API with system and user messages
         let messages = vec![
             ChatMessage {
@@ -153,7 +157,7 @@ impl LLM for OpenAI {
         };
 
         let response = self.chat_completion(messages, Some(chat_options)).await?;
-        
+
         Ok(TextGenerationResponse {
             response: response.message.content,
         })
@@ -181,11 +185,13 @@ impl LLM for OpenAI {
         });
 
         let stream = self.chat_completion_stream(messages, chat_options).await;
-        stream.map(|result| {
-            result.map(|response| TextGenerationResponse {
-                response: response.message.content,
+        stream
+            .map(|result| {
+                result.map(|response| TextGenerationResponse {
+                    response: response.message.content,
+                })
             })
-        }).boxed()
+            .boxed()
     }
 
     async fn chat_completion(
@@ -196,7 +202,7 @@ impl LLM for OpenAI {
         let model = self.model()?;
         let base_url = self.base_url()?;
         let options: OpenAIStyleChatCompletionOptions = options.unwrap_or_default().into();
-        
+
         let mut body = OpenAIStyleChatCompletionRequest::from_chat_messages(messages, model)
             .set_chat_options(options);
 
@@ -224,17 +230,23 @@ impl LLM for OpenAI {
             serde_json::from_str(&text).map_err(|e| OpenAIError::Parsing(e.to_string()))?;
 
         // Convert OpenAI response to our common format
-        let choice = openai_response.choices.first()
+        let choice = openai_response
+            .choices
+            .first()
             .ok_or_else(|| OpenAIError::Parsing("No choices in response".to_string()))?;
 
-        let tool_calls = choice.message.tool_calls.iter().map(|tc| {
-            ToolCallRequest {
+        let tool_calls = choice
+            .message
+            .tool_calls
+            .iter()
+            .map(|tc| ToolCallRequest {
                 function: ToolCallFunction {
                     name: tc.function.name.clone(),
-                    arguments: serde_json::from_str(&tc.function.arguments).unwrap_or(Value::Object(serde_json::Map::new())),
+                    arguments: serde_json::from_str(&tc.function.arguments)
+                        .unwrap_or(Value::Object(serde_json::Map::new())),
                 },
-            }
-        }).collect();
+            })
+            .collect();
 
         let response = ChatCompletionResponse {
             model: openai_response.model,
@@ -271,7 +283,7 @@ impl LLM for OpenAI {
         let model = self.model()?;
         let base_url = self.base_url()?;
         let options: OpenAIStyleChatCompletionOptions = options.unwrap_or_default().into();
-        
+
         let mut body = OpenAIStyleChatCompletionRequest::from_chat_messages(messages, model)
             .set_chat_options(options);
 
@@ -299,17 +311,23 @@ impl LLM for OpenAI {
             serde_json::from_str(&text).map_err(|e| OpenAIError::Parsing(e.to_string()))?;
 
         // Convert OpenAI response to our common format
-        let choice = openai_response.choices.first()
+        let choice = openai_response
+            .choices
+            .first()
             .ok_or_else(|| OpenAIError::Parsing("No choices in response".to_string()))?;
 
-        let tool_calls = choice.message.tool_calls.iter().map(|tc| {
-            ToolCallRequest {
+        let tool_calls = choice
+            .message
+            .tool_calls
+            .iter()
+            .map(|tc| ToolCallRequest {
                 function: ToolCallFunction {
                     name: tc.function.name.clone(),
-                    arguments: serde_json::from_str(&tc.function.arguments).unwrap_or(Value::Object(serde_json::Map::new())),
+                    arguments: serde_json::from_str(&tc.function.arguments)
+                        .unwrap_or(Value::Object(serde_json::Map::new())),
                 },
-            }
-        }).collect();
+            })
+            .collect();
 
         let response = ChatCompletionResponse {
             model: openai_response.model,
@@ -381,7 +399,8 @@ impl LLM for OpenAI {
         let url = utils::create_model_url(base_url, OpenAIAPI::ChatCompletion);
         let headers = vec![("Authorization".to_string(), format!("Bearer {}", api_key))];
 
-        let stream_future = HTTPRequest::stream_request_with_headers(url, serde_json::json!(body), headers);
+        let stream_future =
+            HTTPRequest::stream_request_with_headers(url, serde_json::json!(body), headers);
 
         stream::once(stream_future)
             .then(|result| async move {
@@ -396,7 +415,7 @@ impl LLM for OpenAI {
             .filter_map(|chunk_result| async move {
                 match chunk_result {
                     Ok(chunk) => {
-                        // Parse OpenAI streaming format  
+                        // Parse OpenAI streaming format
                         if let Some(data) = parse_openai_style_stream_chunk(&chunk) {
                             match serde_json::from_str::<OpenAIStyleStreamResponse>(&data) {
                                 Ok(stream_response) => {
@@ -405,18 +424,30 @@ impl LLM for OpenAI {
                                             model: stream_response.model,
                                             created_at: stream_response.created.to_string(),
                                             message: ChatResponseMessage {
-                                                role: match choice.delta.role.as_deref().unwrap_or("assistant") {
+                                                role: match choice
+                                                    .delta
+                                                    .role
+                                                    .as_deref()
+                                                    .unwrap_or("assistant")
+                                                {
                                                     "system" => ChatRole::System,
                                                     "user" => ChatRole::User,
                                                     "assistant" => ChatRole::Assistant,
                                                     "tool" => ChatRole::Tool,
                                                     _ => ChatRole::Assistant,
                                                 },
-                                                content: choice.delta.content.clone().unwrap_or_default(),
+                                                content: choice
+                                                    .delta
+                                                    .content
+                                                    .clone()
+                                                    .unwrap_or_default(),
                                                 tool_calls: vec![], // TODO: Handle tool calls in streaming
                                             },
                                             done: choice.finish_reason.is_some(),
-                                            done_reason: choice.finish_reason.clone().unwrap_or_default(),
+                                            done_reason: choice
+                                                .finish_reason
+                                                .clone()
+                                                .unwrap_or_default(),
                                             total_duration: 0,
                                             load_duration: 0,
                                             prompt_eval_count: 0,

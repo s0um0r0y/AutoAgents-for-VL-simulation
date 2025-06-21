@@ -1,2 +1,7 @@
 pub mod agent;
-pub mod runtime;
+pub mod environment;
+mod error;
+pub mod protocol;
+pub mod session;
+
+pub use error::SessionError;

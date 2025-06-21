@@ -5,6 +5,8 @@ edition = "2021"
 
 [dependencies]
 autoagents = { path = "../../crates/autoagents" }
+autoagents-core = { path = "../../crates/core" }
+autoagents-llm = { path = "../../crates/llm" }
 autoagents-derive = { path = "../../crates/derive" }
 tokio = { workspace = true }
 futures = { workspace = true }
@@ -15,3 +17,4 @@ async-trait = { workspace = true }
 urlencoding = "2.1.3"
 reqwest.workspace = true
 ureq = { version = "3.0.8", features = ["json"] }
+uuid = { workspace = true }
