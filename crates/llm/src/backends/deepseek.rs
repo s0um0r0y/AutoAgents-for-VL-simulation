@@ -228,7 +228,7 @@ impl ModelsProvider for DeepSeek {}
 impl LLMProvider for DeepSeek {}
 
 impl LLMBuilder<DeepSeek> {
-    pub fn build(self) -> Result<Arc<Box<dyn LLMProvider>>, LLMError> {
+    pub fn build(self) -> Result<Arc<dyn LLMProvider>, LLMError> {
         let api_key = self.api_key.ok_or_else(|| {
             LLMError::InvalidRequest("No API key provided for DeepSeek".to_string())
         })?;
@@ -247,15 +247,15 @@ impl LLMBuilder<DeepSeek> {
         if let Some(memory) = self.memory {
             let memory_arc = Arc::new(RwLock::new(memory));
             let provider_arc = Arc::new(deepseek);
-            Ok(Arc::new(Box::new(ChatWithMemory::new(
+            Ok(Arc::new(ChatWithMemory::new(
                 provider_arc,
                 memory_arc,
                 None,
                 Vec::new(),
                 None,
-            ))))
+            )))
         } else {
-            Ok(Arc::new(Box::new(deepseek)))
+            Ok(Arc::new(deepseek))
         }
     }
 }

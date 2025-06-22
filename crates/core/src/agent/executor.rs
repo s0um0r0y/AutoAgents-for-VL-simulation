@@ -28,7 +28,7 @@ pub trait AgentExecutor: Send + Sync + 'static {
     /// Execute the agent with the given session
     async fn execute(
         &self,
-        llm: Arc<Box<dyn LLMProvider>>,
+        llm: Arc<dyn LLMProvider>,
         session: &mut Session,
         task: Task,
     ) -> Result<Self::Output, Self::Error>;
@@ -36,7 +36,7 @@ pub trait AgentExecutor: Send + Sync + 'static {
     /// Process a single turn of conversation
     async fn process_turn(
         &self,
-        llm: Arc<Box<dyn LLMProvider>>,
+        llm: Arc<dyn LLMProvider>,
         session: &mut Session,
         messages: &mut Vec<ChatMessage>,
     ) -> Result<TurnResult<Self::Output>, Self::Error>;

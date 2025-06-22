@@ -747,7 +747,7 @@ fn parse_anthropic_sse_chunk(chunk: &str) -> Result<Option<String>, LLMError> {
 }
 
 impl LLMBuilder<Anthropic> {
-    pub fn build(self) -> Result<Arc<Box<dyn LLMProvider>>, LLMError> {
+    pub fn build(self) -> Result<Arc<dyn LLMProvider>, LLMError> {
         let (tools, tool_choice) = self.validate_tool_config()?;
         let api_key = self.api_key.ok_or_else(|| {
             LLMError::InvalidRequest("No API key provided for Anthropic".to_string())
@@ -773,15 +773,15 @@ impl LLMBuilder<Anthropic> {
         if let Some(memory) = self.memory {
             let memory_arc = Arc::new(RwLock::new(memory));
             let provider_arc = Arc::new(anthro);
-            Ok(Arc::new(Box::new(ChatWithMemory::new(
+            Ok(Arc::new(ChatWithMemory::new(
                 provider_arc,
                 memory_arc,
                 None,
                 Vec::new(),
                 None,
-            ))))
+            )))
         } else {
-            Ok(Arc::new(Box::new(anthro)))
+            Ok(Arc::new(anthro))
         }
     }
 }

@@ -222,7 +222,7 @@ impl ModelsProvider for Groq {}
 impl LLMProvider for Groq {}
 
 impl LLMBuilder<Groq> {
-    pub fn build(self) -> Result<Arc<Box<dyn LLMProvider>>, LLMError> {
+    pub fn build(self) -> Result<Arc<dyn LLMProvider>, LLMError> {
         let api_key = self
             .api_key
             .ok_or_else(|| LLMError::InvalidRequest("No API key provided for Groq".to_string()))?;
@@ -242,15 +242,15 @@ impl LLMBuilder<Groq> {
         if let Some(memory) = self.memory {
             let memory_arc = Arc::new(RwLock::new(memory));
             let provider_arc = Arc::new(groq);
-            Ok(Arc::new(Box::new(ChatWithMemory::new(
+            Ok(Arc::new(ChatWithMemory::new(
                 provider_arc,
                 memory_arc,
                 None,
                 Vec::new(),
                 None,
-            ))))
+            )))
         } else {
-            Ok(Arc::new(Box::new(groq)))
+            Ok(Arc::new(groq))
         }
     }
 }

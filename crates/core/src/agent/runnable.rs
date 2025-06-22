@@ -28,7 +28,7 @@ pub trait RunnableAgent: Send + Sync + 'static {
         self: Arc<Self>,
         session: Session,
         task: Task,
-        llm: Arc<Box<dyn LLMProvider>>,
+        llm: Arc<dyn LLMProvider>,
         tx_event: mpsc::Sender<Event>,
     ) -> Result<Value, Box<dyn std::error::Error + Send + Sync>>;
 
@@ -37,7 +37,7 @@ pub trait RunnableAgent: Send + Sync + 'static {
         self: Arc<Self>,
         session: Session,
         task: Task,
-        llm: Arc<Box<dyn LLMProvider>>,
+        llm: Arc<dyn LLMProvider>,
         tx_event: mpsc::Sender<Event>,
     ) -> JoinHandle<Result<Value, Box<dyn std::error::Error + Send + Sync>>> {
         tokio::spawn(async move { self.run(session, task, llm, tx_event).await })
@@ -88,7 +88,7 @@ where
         self: Arc<Self>,
         session: Session,
         task: Task,
-        llm: Arc<Box<dyn LLMProvider>>,
+        llm: Arc<dyn LLMProvider>,
         tx_event: mpsc::Sender<Event>,
     ) -> Result<Value, Box<dyn std::error::Error + Send + Sync>> {
         // Execute the agent

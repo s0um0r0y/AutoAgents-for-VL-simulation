@@ -543,7 +543,7 @@ impl crate::LLMProvider for Ollama {
 }
 
 impl LLMBuilder<Ollama> {
-    pub fn build(self) -> Result<Arc<Box<dyn LLMProvider>>, LLMError> {
+    pub fn build(self) -> Result<Arc<dyn LLMProvider>, LLMError> {
         let (tools, _) = self.validate_tool_config()?;
         let url = self
             .base_url
@@ -566,15 +566,15 @@ impl LLMBuilder<Ollama> {
         if let Some(memory) = self.memory {
             let memory_arc = Arc::new(RwLock::new(memory));
             let provider_arc = Arc::new(ollama);
-            Ok(Arc::new(Box::new(ChatWithMemory::new(
+            Ok(Arc::new(ChatWithMemory::new(
                 provider_arc,
                 memory_arc,
                 None,
                 Vec::new(),
                 None,
-            ))))
+            )))
         } else {
-            Ok(Arc::new(Box::new(ollama)))
+            Ok(Arc::new(ollama))
         }
     }
 }

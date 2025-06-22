@@ -92,7 +92,7 @@ impl AgentExecutor for SimpleExecutor {
 
     async fn execute(
         &self,
-        llm: Arc<Box<dyn LLMProvider>>,
+        llm: Arc<dyn LLMProvider>,
         session: &mut Session,
         task: Task,
     ) -> Result<Self::Output, Self::Error> {
@@ -141,18 +141,14 @@ impl AgentExecutor for SimpleExecutor {
 
     async fn process_turn(
         &self,
-        llm: Arc<Box<dyn LLMProvider>>,
+        llm: Arc<dyn LLMProvider>,
         session: &mut Session,
         messages: &mut Vec<ChatMessage>,
     ) -> Result<TurnResult<Self::Output>, Self::Error> {
         let has_tools = !self.tools.is_empty();
         let response;
         if has_tools {
-            let tools = self
-                .tools
-                .iter()
-                .map(Tool::from)
-                .collect::<Vec<_>>();
+            let tools = self.tools.iter().map(Tool::from).collect::<Vec<_>>();
             response = llm
                 .chat_with_tools(messages.as_slice(), Some(tools.as_slice()))
                 .await;

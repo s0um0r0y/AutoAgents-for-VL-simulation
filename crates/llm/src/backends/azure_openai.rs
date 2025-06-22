@@ -597,7 +597,7 @@ impl LLMProvider for AzureOpenAI {
 impl ModelsProvider for AzureOpenAI {}
 
 impl LLMBuilder<AzureOpenAI> {
-    pub fn build(self) -> Result<Arc<Box<dyn LLMProvider>>, LLMError> {
+    pub fn build(self) -> Result<Arc<dyn LLMProvider>, LLMError> {
         let (tools, tool_choice) = self.validate_tool_config()?;
         let endpoint = self.base_url.ok_or_else(|| {
             LLMError::InvalidRequest("No API endpoint provided for Azure OpenAI".into())
@@ -640,15 +640,15 @@ impl LLMBuilder<AzureOpenAI> {
         if let Some(memory) = self.memory {
             let memory_arc = Arc::new(RwLock::new(memory));
             let provider_arc = Arc::new(provider);
-            Ok(Arc::new(Box::new(ChatWithMemory::new(
+            Ok(Arc::new(ChatWithMemory::new(
                 provider_arc,
                 memory_arc,
                 None,
                 Vec::new(),
                 None,
-            ))))
+            )))
         } else {
-            Ok(Arc::new(Box::new(provider)))
+            Ok(Arc::new(provider))
         }
     }
 }

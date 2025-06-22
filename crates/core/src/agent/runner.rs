@@ -21,7 +21,7 @@ impl<E: AgentExecutor + Send + Sync> AgentRunner<E> {
     /// Run the agent in an event-driven manner
     pub async fn run(
         &self,
-        llm: Arc<Box<dyn LLMProvider>>,
+        llm: Arc<dyn LLMProvider>,
         mut session: Session,
         task: Task,
     ) -> Result<E::Output, E::Error> {

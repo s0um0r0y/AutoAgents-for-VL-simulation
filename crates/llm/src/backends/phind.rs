@@ -299,7 +299,7 @@ impl ModelsProvider for Phind {}
 impl LLMProvider for Phind {}
 
 impl LLMBuilder<Phind> {
-    pub fn build(self) -> Result<Arc<Box<dyn LLMProvider>>, LLMError> {
+    pub fn build(self) -> Result<Arc<dyn LLMProvider>, LLMError> {
         let phind = crate::backends::phind::Phind::new(
             self.model,
             self.max_tokens,
@@ -314,15 +314,15 @@ impl LLMBuilder<Phind> {
         if let Some(memory) = self.memory {
             let memory_arc = Arc::new(RwLock::new(memory));
             let provider_arc = Arc::new(phind);
-            Ok(Arc::new(Box::new(ChatWithMemory::new(
+            Ok(Arc::new(ChatWithMemory::new(
                 provider_arc,
                 memory_arc,
                 None,
                 Vec::new(),
                 None,
-            ))))
+            )))
         } else {
-            Ok(Arc::new(Box::new(phind)))
+            Ok(Arc::new(phind))
         }
     }
 }

@@ -202,7 +202,7 @@ impl Session {
         &mut self,
         task: Task,
         agent_id: AgentID,
-        llm: Arc<Box<dyn LLMProvider>>,
+        llm: Arc<dyn LLMProvider>,
     ) -> Result<Value, SessionError> {
         // Get the agent
         let agent = self
@@ -224,7 +224,7 @@ impl Session {
     pub async fn run(
         &mut self,
         agent_id: Uuid,
-        llm: Arc<Box<dyn LLMProvider>>,
+        llm: Arc<dyn LLMProvider>,
     ) -> Result<Value, SessionError> {
         if let Some(task) = self.get_top_task() {
             self.run_task(task, agent_id, llm).await
@@ -237,7 +237,7 @@ impl Session {
     pub async fn run_all(
         &mut self,
         agent_id: Uuid,
-        llm: Arc<Box<dyn LLMProvider>>,
+        llm: Arc<dyn LLMProvider>,
     ) -> Result<Vec<Value>, SessionError> {
         let mut results = Vec::new();
 

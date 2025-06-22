@@ -38,7 +38,7 @@ fn handle_events(mut event_receiver: Receiver<Event>) {
     });
 }
 
-pub async fn simple_agent(llm: Arc<Box<dyn LLMProvider>>) {
+pub async fn simple_agent(llm: Arc<dyn LLMProvider>) {
     // Build a Simple agent
     let agent = SimpleAgentBuilder::from_agent(
         WeatherAgent {},

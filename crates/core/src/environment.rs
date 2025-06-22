@@ -58,7 +58,7 @@ pub struct TaskHandle {
 /// Environment for managing agents and their execution
 pub struct Environment {
     config: EnvironmentConfig,
-    llm: Arc<Box<dyn LLMProvider>>,
+    llm: Arc<dyn LLMProvider>,
     tx_event: mpsc::Sender<Event>,
     rx_event: Option<mpsc::Receiver<Event>>,
     sessions: HashMap<SessionId, Session>,
@@ -68,7 +68,7 @@ pub struct Environment {
 
 impl Environment {
     /// Create a new Environment with the given LLM and configuration
-    pub fn new(llm: Arc<Box<dyn LLMProvider>>, config: Option<EnvironmentConfig>) -> Self {
+    pub fn new(llm: Arc<dyn LLMProvider>, config: Option<EnvironmentConfig>) -> Self {
         let config = config.unwrap_or_default();
         let cwd = config.clone().working_dir;
         let (tx_event, rx_event) = mpsc::channel(config.channel_buffer);
