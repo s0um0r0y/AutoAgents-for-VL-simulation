@@ -2,16 +2,17 @@
 //!
 //! This module provides integration with Anthropic's Claude models through their API.
 
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
 
 use crate::{
-    builder::LLMBackend,
+    builder::{LLMBackend, LLMBuilder},
     chat::{ChatMessage, ChatProvider, ChatResponse, ChatRole, MessageType, Tool, ToolChoice},
     completion::{CompletionProvider, CompletionRequest, CompletionResponse},
     embedding::EmbeddingProvider,
     error::LLMError,
+    memory::ChatWithMemory,
     models::{ModelListRawEntry, ModelListRequest, ModelListResponse, ModelsProvider},
-    FunctionCall, ToolCall,
+    FunctionCall, LLMProvider, ToolCall,
 };
 use async_trait::async_trait;
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
@@ -20,6 +21,7 @@ use futures::stream::Stream;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use tokio::sync::RwLock;
 
 /// Client for interacting with Anthropic's API.
 ///
@@ -742,4 +744,44 @@ fn parse_anthropic_sse_chunk(chunk: &str) -> Result<Option<String>, LLMError> {
     }
 
     Ok(None)
+}
+
+impl LLMBuilder<Anthropic> {
+    pub fn build(self) -> Result<Arc<Box<dyn LLMProvider>>, LLMError> {
+        let (tools, tool_choice) = self.validate_tool_config()?;
+        let api_key = self.api_key.ok_or_else(|| {
+            LLMError::InvalidRequest("No API key provided for Anthropic".to_string())
+        })?;
+
+        let anthro = crate::backends::anthropic::Anthropic::new(
+            api_key,
+            self.model,
+            self.max_tokens,
+            self.temperature,
+            self.timeout_seconds,
+            self.system,
+            self.stream,
+            self.top_p,
+            self.top_k,
+            tools,
+            tool_choice,
+            self.reasoning,
+            self.reasoning_budget_tokens,
+        );
+
+        // Wrap with memory capabilities if memory is configured
+        if let Some(memory) = self.memory {
+            let memory_arc = Arc::new(RwLock::new(memory));
+            let provider_arc = Arc::new(anthro);
+            Ok(Arc::new(Box::new(ChatWithMemory::new(
+                provider_arc,
+                memory_arc,
+                None,
+                Vec::new(),
+                None,
+            ))))
+        } else {
+            Ok(Arc::new(Box::new(anthro)))
+        }
+    }
 }

@@ -151,14 +151,14 @@ impl AgentExecutor for SimpleExecutor {
             let tools = self
                 .tools
                 .iter()
-                .map(|tool| Tool::from(tool))
+                .map(Tool::from)
                 .collect::<Vec<_>>();
             response = llm
                 .chat_with_tools(messages.as_slice(), Some(tools.as_slice()))
                 .await;
         } else {
             // Call the LLM
-            response = llm.chat(&messages.as_slice()).await;
+            response = llm.chat(messages.as_slice()).await;
         }
         let response_mapped = response.map_err(|e| SimpleError::LLMError(e.to_string()))?;
 

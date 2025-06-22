@@ -2,18 +2,23 @@
 //!
 //! This module provides integration with Ollama's local LLM server through its API.
 
+use std::sync::Arc;
+
 use crate::{
+    builder::LLMBuilder,
     chat::{ChatMessage, ChatProvider, ChatResponse, ChatRole, StructuredOutputFormat, Tool},
     completion::{CompletionProvider, CompletionRequest, CompletionResponse},
     embedding::EmbeddingProvider,
     error::LLMError,
+    memory::ChatWithMemory,
     models::ModelsProvider,
-    FunctionCall, ToolCall,
+    FunctionCall, LLMProvider, ToolCall,
 };
 use async_trait::async_trait;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use tokio::sync::RwLock;
 
 /// Client for interacting with Ollama's API.
 ///
@@ -534,5 +539,42 @@ impl ModelsProvider for Ollama {}
 impl crate::LLMProvider for Ollama {
     fn tools(&self) -> Option<&[Tool]> {
         self.tools.as_deref()
+    }
+}
+
+impl LLMBuilder<Ollama> {
+    pub fn build(self) -> Result<Arc<Box<dyn LLMProvider>>, LLMError> {
+        let (tools, _) = self.validate_tool_config()?;
+        let url = self
+            .base_url
+            .unwrap_or("http://localhost:11434".to_string());
+        let ollama = crate::backends::ollama::Ollama::new(
+            url,
+            self.api_key,
+            self.model,
+            self.max_tokens,
+            self.temperature,
+            self.timeout_seconds,
+            self.system,
+            self.stream,
+            self.top_p,
+            self.top_k,
+            self.json_schema,
+            tools,
+        );
+        // Wrap with memory capabilities if memory is configured
+        if let Some(memory) = self.memory {
+            let memory_arc = Arc::new(RwLock::new(memory));
+            let provider_arc = Arc::new(ollama);
+            Ok(Arc::new(Box::new(ChatWithMemory::new(
+                provider_arc,
+                memory_arc,
+                None,
+                Vec::new(),
+                None,
+            ))))
+        } else {
+            Ok(Arc::new(Box::new(ollama)))
+        }
     }
 }

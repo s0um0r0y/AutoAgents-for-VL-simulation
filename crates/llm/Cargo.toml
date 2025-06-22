@@ -58,7 +58,7 @@ ureq = { workspace = true }
 log = { workspace = true }
 env_logger = { workspace = true, optional = true }
 chrono = { workspace = true }
-dirs = "6.0.0"
-regex = "1.11.1"
+dirs = { workspace = true }
+regex = { workspace = true }
 base64 = "0.22.1"
 either = { version = "1.15.0", features = ["serde"] }

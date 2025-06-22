@@ -3,6 +3,14 @@
 //! This module provides integration with X.AI's models through their API.
 //! It implements chat and completion capabilities using the X.AI API endpoints.
 
+use std::sync::Arc;
+
+use crate::{
+    builder::LLMBuilder,
+    chat::{ChatResponse, Tool},
+    memory::ChatWithMemory,
+    ToolCall,
+};
 #[cfg(feature = "xai")]
 use crate::{
     chat::{ChatMessage, ChatProvider, ChatRole, StructuredOutputFormat},
@@ -12,14 +20,11 @@ use crate::{
     models::ModelsProvider,
     LLMProvider,
 };
-use crate::{
-    chat::{ChatResponse, Tool},
-    ToolCall,
-};
 use async_trait::async_trait;
 use futures::stream::Stream;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
+use tokio::sync::RwLock;
 
 /// Client for interacting with X.AI's API.
 ///
@@ -590,4 +595,89 @@ fn parse_xai_sse_chunk(chunk: &str) -> Result<Option<String>, LLMError> {
     }
 
     Ok(None)
+}
+
+impl LLMBuilder<XAI> {
+    /// Sets the search mode for search-enabled providers.
+    pub fn xai_search_mode(mut self, mode: impl Into<String>) -> Self {
+        self.xai_search_mode = Some(mode.into());
+        self
+    }
+
+    /// Adds a search source with optional excluded websites.
+    pub fn xai_search_source(
+        mut self,
+        source_type: impl Into<String>,
+        excluded_websites: Option<Vec<String>>,
+    ) -> Self {
+        self.xai_search_source_type = Some(source_type.into());
+        self.xai_search_excluded_websites = excluded_websites;
+        self
+    }
+
+    /// Sets the maximum number of search results.
+    pub fn xai_max_search_results(mut self, max: u32) -> Self {
+        self.xai_search_max_results = Some(max);
+        self
+    }
+
+    /// Sets the date range for search results.
+    pub fn xai_search_date_range(mut self, from: impl Into<String>, to: impl Into<String>) -> Self {
+        self.xai_search_from_date = Some(from.into());
+        self.xai_search_to_date = Some(to.into());
+        self
+    }
+
+    /// Sets the start date for search results (format: "YYYY-MM-DD").
+    pub fn xai_search_from_date(mut self, date: impl Into<String>) -> Self {
+        self.xai_search_from_date = Some(date.into());
+        self
+    }
+
+    /// Sets the end date for search results (format: "YYYY-MM-DD").
+    pub fn xai_search_to_date(mut self, date: impl Into<String>) -> Self {
+        self.xai_search_to_date = Some(date.into());
+        self
+    }
+
+    pub fn build(self) -> Result<Arc<Box<dyn LLMProvider>>, LLMError> {
+        let api_key = self
+            .api_key
+            .ok_or_else(|| LLMError::InvalidRequest("No API key provided for XAI".to_string()))?;
+
+        let xai = crate::backends::xai::XAI::new(
+            api_key,
+            self.model,
+            self.max_tokens,
+            self.temperature,
+            self.timeout_seconds,
+            self.system,
+            self.stream,
+            self.top_p,
+            self.top_k,
+            self.embedding_encoding_format,
+            self.embedding_dimensions,
+            self.json_schema,
+            self.xai_search_mode,
+            self.xai_search_source_type,
+            self.xai_search_excluded_websites,
+            self.xai_search_max_results,
+            self.xai_search_from_date,
+            self.xai_search_to_date,
+        );
+        // Wrap with memory capabilities if memory is configured
+        if let Some(memory) = self.memory {
+            let memory_arc = Arc::new(RwLock::new(memory));
+            let provider_arc = Arc::new(xai);
+            Ok(Arc::new(Box::new(ChatWithMemory::new(
+                provider_arc,
+                memory_arc,
+                None,
+                Vec::new(),
+                None,
+            ))))
+        } else {
+            Ok(Arc::new(Box::new(xai)))
+        }
+    }
 }

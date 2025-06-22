@@ -229,7 +229,7 @@ impl Session {
         if let Some(task) = self.get_top_task() {
             self.run_task(task, agent_id, llm).await
         } else {
-            return Err(SessionError::NoTaskSet(agent_id));
+            Err(SessionError::NoTaskSet(agent_id))
         }
     }
 

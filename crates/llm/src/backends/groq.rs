@@ -2,17 +2,22 @@
 //!
 //! This module provides integration with Groq's LLM models through their API.
 
+use std::sync::Arc;
+
 use crate::{
+    builder::LLMBuilder,
     chat::{ChatMessage, ChatProvider, ChatResponse, ChatRole, Tool},
     completion::{CompletionProvider, CompletionRequest, CompletionResponse},
     embedding::EmbeddingProvider,
     error::LLMError,
+    memory::ChatWithMemory,
     models::ModelsProvider,
     LLMProvider, ToolCall,
 };
 use async_trait::async_trait;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
+use tokio::sync::RwLock;
 
 /// Client for interacting with Groq's API.
 pub struct Groq {
@@ -215,3 +220,37 @@ impl EmbeddingProvider for Groq {
 impl ModelsProvider for Groq {}
 
 impl LLMProvider for Groq {}
+
+impl LLMBuilder<Groq> {
+    pub fn build(self) -> Result<Arc<Box<dyn LLMProvider>>, LLMError> {
+        let api_key = self
+            .api_key
+            .ok_or_else(|| LLMError::InvalidRequest("No API key provided for Groq".to_string()))?;
+
+        let groq = crate::backends::groq::Groq::new(
+            api_key,
+            self.model,
+            self.max_tokens,
+            self.temperature,
+            self.timeout_seconds,
+            self.system,
+            self.stream,
+            self.top_p,
+            self.top_k,
+        );
+        // Wrap with memory capabilities if memory is configured
+        if let Some(memory) = self.memory {
+            let memory_arc = Arc::new(RwLock::new(memory));
+            let provider_arc = Arc::new(groq);
+            Ok(Arc::new(Box::new(ChatWithMemory::new(
+                provider_arc,
+                memory_arc,
+                None,
+                Vec::new(),
+                None,
+            ))))
+        } else {
+            Ok(Arc::new(Box::new(groq)))
+        }
+    }
+}

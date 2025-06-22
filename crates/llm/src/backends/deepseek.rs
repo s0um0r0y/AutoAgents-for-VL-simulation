@@ -2,7 +2,13 @@
 //!
 //! This module provides integration with DeepSeek's models through their API.
 
-use crate::chat::{ChatResponse, Tool};
+use std::sync::Arc;
+
+use crate::{
+    builder::LLMBuilder,
+    chat::{ChatResponse, Tool},
+    memory::ChatWithMemory,
+};
 #[cfg(feature = "deepseek")]
 use crate::{
     chat::{ChatMessage, ChatProvider, ChatRole},
@@ -15,6 +21,7 @@ use crate::{
 use async_trait::async_trait;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
+use tokio::sync::RwLock;
 
 use crate::ToolCall;
 
@@ -219,3 +226,36 @@ impl EmbeddingProvider for DeepSeek {
 impl ModelsProvider for DeepSeek {}
 
 impl LLMProvider for DeepSeek {}
+
+impl LLMBuilder<DeepSeek> {
+    pub fn build(self) -> Result<Arc<Box<dyn LLMProvider>>, LLMError> {
+        let api_key = self.api_key.ok_or_else(|| {
+            LLMError::InvalidRequest("No API key provided for DeepSeek".to_string())
+        })?;
+
+        let deepseek = crate::backends::deepseek::DeepSeek::new(
+            api_key,
+            self.model,
+            self.max_tokens,
+            self.temperature,
+            self.timeout_seconds,
+            self.system,
+            self.stream,
+        );
+
+        // Wrap with memory capabilities if memory is configured
+        if let Some(memory) = self.memory {
+            let memory_arc = Arc::new(RwLock::new(memory));
+            let provider_arc = Arc::new(deepseek);
+            Ok(Arc::new(Box::new(ChatWithMemory::new(
+                provider_arc,
+                memory_arc,
+                None,
+                Vec::new(),
+                None,
+            ))))
+        } else {
+            Ok(Arc::new(Box::new(deepseek)))
+        }
+    }
+}

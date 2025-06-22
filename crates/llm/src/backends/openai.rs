@@ -2,6 +2,8 @@
 //!
 //! This module provides integration with OpenAI's GPT models through their API.
 
+use std::sync::Arc;
+
 #[cfg(feature = "openai")]
 use crate::{
     builder::LLMBackend,
@@ -14,7 +16,9 @@ use crate::{
     LLMProvider,
 };
 use crate::{
+    builder::LLMBuilder,
     chat::{ChatResponse, ToolChoice},
+    memory::ChatWithMemory,
     FunctionCall, ToolCall,
 };
 use async_trait::async_trait;
@@ -24,6 +28,7 @@ use futures::stream::Stream;
 use reqwest::{Client, Url};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use tokio::sync::RwLock;
 
 /// Client for interacting with OpenAI's API.
 ///
@@ -906,5 +911,107 @@ fn parse_sse_chunk(chunk: &str) -> Result<Option<String>, LLMError> {
         Ok(None)
     } else {
         Ok(Some(collected_content))
+    }
+}
+
+impl LLMBuilder<OpenAI> {
+    /// Set the voice.
+    pub fn voice(mut self, voice: impl Into<String>) -> Self {
+        self.voice = Some(voice.into());
+        self
+    }
+
+    /// Enable web search
+    pub fn openai_enable_web_search(mut self, enable: bool) -> Self {
+        self.openai_enable_web_search = Some(enable);
+        self
+    }
+
+    /// Set the web search context
+    pub fn openai_web_search_context_size(mut self, context_size: impl Into<String>) -> Self {
+        self.openai_web_search_context_size = Some(context_size.into());
+        self
+    }
+
+    /// Set the web search user location type
+    pub fn openai_web_search_user_location_type(
+        mut self,
+        location_type: impl Into<String>,
+    ) -> Self {
+        self.openai_web_search_user_location_type = Some(location_type.into());
+        self
+    }
+
+    /// Set the web search user location approximate country
+    pub fn openai_web_search_user_location_approximate_country(
+        mut self,
+        country: impl Into<String>,
+    ) -> Self {
+        self.openai_web_search_user_location_approximate_country = Some(country.into());
+        self
+    }
+
+    /// Set the web search user location approximate city
+    pub fn openai_web_search_user_location_approximate_city(
+        mut self,
+        city: impl Into<String>,
+    ) -> Self {
+        self.openai_web_search_user_location_approximate_city = Some(city.into());
+        self
+    }
+
+    /// Set the web search user location approximate region
+    pub fn openai_web_search_user_location_approximate_region(
+        mut self,
+        region: impl Into<String>,
+    ) -> Self {
+        self.openai_web_search_user_location_approximate_region = Some(region.into());
+        self
+    }
+
+    pub fn build(self) -> Result<Arc<Box<dyn LLMProvider>>, LLMError> {
+        let (tools, tool_choice) = self.validate_tool_config()?;
+        let key = self.api_key.ok_or_else(|| {
+            LLMError::InvalidRequest("No API key provided for OpenAI".to_string())
+        })?;
+        let openai = OpenAI::new(
+            key,
+            self.base_url,
+            self.model,
+            self.max_tokens,
+            self.temperature,
+            self.timeout_seconds,
+            self.system,
+            self.stream,
+            self.top_p,
+            self.top_k,
+            self.embedding_encoding_format,
+            self.embedding_dimensions,
+            tools,
+            tool_choice,
+            self.reasoning_effort,
+            self.json_schema,
+            self.voice,
+            self.openai_enable_web_search,
+            self.openai_web_search_context_size,
+            self.openai_web_search_user_location_type,
+            self.openai_web_search_user_location_approximate_country,
+            self.openai_web_search_user_location_approximate_city,
+            self.openai_web_search_user_location_approximate_region,
+        );
+        // Wrap with memory capabilities if memory is configured
+        if let Some(memory) = self.memory {
+            let memory_arc = Arc::new(RwLock::new(memory));
+            let provider_arc = Arc::new(openai);
+            Ok(Arc::new(Box::new(ChatWithMemory::new(
+                provider_arc,
+                memory_arc,
+                None,
+                Vec::new(),
+                None,
+            ))))
+        } else {
+            Ok(Arc::new(Box::new(openai)))
+        }
     }
 }

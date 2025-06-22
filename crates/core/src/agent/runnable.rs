@@ -104,6 +104,12 @@ where
 /// Builder for creating runnable agents
 pub struct RunnableAgentBuilder {}
 
+impl Default for RunnableAgentBuilder {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl RunnableAgentBuilder {
     pub fn new() -> Self {
         Self {}

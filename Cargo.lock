@@ -110,6 +110,7 @@ dependencies = [
  "autoagents-llm",
  "dirs",
  "futures",
+ "regex",
  "reqwest",
  "serde",
  "serde_json",

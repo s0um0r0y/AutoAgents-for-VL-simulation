@@ -41,7 +41,10 @@
 //! }
 //! ```
 
+use std::sync::Arc;
+
 use crate::{
+    builder::LLMBuilder,
     chat::{
         ChatMessage, ChatProvider, ChatResponse, ChatRole, MessageType, StructuredOutputFormat,
         Tool,
@@ -49,6 +52,7 @@ use crate::{
     completion::{CompletionProvider, CompletionRequest, CompletionResponse},
     embedding::EmbeddingProvider,
     error::LLMError,
+    memory::ChatWithMemory,
     models::ModelsProvider,
     FunctionCall, LLMProvider, ToolCall,
 };
@@ -58,6 +62,7 @@ use futures::stream::Stream;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use tokio::sync::RwLock;
 
 /// Client for interacting with Google's Gemini API.
 ///
@@ -1044,3 +1049,40 @@ fn parse_google_sse_chunk(chunk: &str) -> Result<Option<String>, LLMError> {
 
 #[async_trait]
 impl ModelsProvider for Google {}
+
+impl LLMBuilder<Google> {
+    pub fn build(self) -> Result<Arc<Box<dyn LLMProvider>>, LLMError> {
+        let (tools, _) = self.validate_tool_config()?;
+        let api_key = self.api_key.ok_or_else(|| {
+            LLMError::InvalidRequest("No API key provided for Google".to_string())
+        })?;
+
+        let google = crate::backends::google::Google::new(
+            api_key,
+            self.model,
+            self.max_tokens,
+            self.temperature,
+            self.timeout_seconds,
+            self.system,
+            self.stream,
+            self.top_p,
+            self.top_k,
+            self.json_schema,
+            tools,
+        );
+        // Wrap with memory capabilities if memory is configured
+        if let Some(memory) = self.memory {
+            let memory_arc = Arc::new(RwLock::new(memory));
+            let provider_arc = Arc::new(google);
+            Ok(Arc::new(Box::new(ChatWithMemory::new(
+                provider_arc,
+                memory_arc,
+                None,
+                Vec::new(),
+                None,
+            ))))
+        } else {
+            Ok(Arc::new(Box::new(google)))
+        }
+    }
+}

@@ -2,6 +2,14 @@
 //!
 //! This module provides integration with Azure OpenAI's GPT models through their API.
 
+use std::sync::Arc;
+
+use crate::{
+    builder::LLMBuilder,
+    chat::{ChatResponse, ToolChoice},
+    memory::ChatWithMemory,
+    FunctionCall, ToolCall,
+};
 #[cfg(feature = "azure_openai")]
 use crate::{
     chat::Tool,
@@ -12,14 +20,11 @@ use crate::{
     models::ModelsProvider,
     LLMProvider,
 };
-use crate::{
-    chat::{ChatResponse, ToolChoice},
-    FunctionCall, ToolCall,
-};
 use async_trait::async_trait;
 use either::*;
 use reqwest::{Client, Url};
 use serde::{Deserialize, Serialize};
+use tokio::sync::RwLock;
 
 /// Client for interacting with Azure OpenAI's API.
 ///
@@ -590,3 +595,60 @@ impl LLMProvider for AzureOpenAI {
 
 #[async_trait]
 impl ModelsProvider for AzureOpenAI {}
+
+impl LLMBuilder<AzureOpenAI> {
+    pub fn build(self) -> Result<Arc<Box<dyn LLMProvider>>, LLMError> {
+        let (tools, tool_choice) = self.validate_tool_config()?;
+        let endpoint = self.base_url.ok_or_else(|| {
+            LLMError::InvalidRequest("No API endpoint provided for Azure OpenAI".into())
+        })?;
+
+        let key = self.api_key.ok_or_else(|| {
+            LLMError::InvalidRequest("No API key provided for Azure OpenAI".to_string())
+        })?;
+
+        let api_version = self.api_version.ok_or_else(|| {
+            LLMError::InvalidRequest("No API version provided for Azure OpenAI".to_string())
+        })?;
+
+        let deployment = self.deployment_id.ok_or_else(|| {
+            LLMError::InvalidRequest("No deployment ID provided for Azure OpenAI".into())
+        })?;
+
+        let provider = crate::backends::azure_openai::AzureOpenAI::new(
+            key,
+            api_version,
+            deployment,
+            endpoint,
+            self.model,
+            self.max_tokens,
+            self.temperature,
+            self.timeout_seconds,
+            self.system,
+            self.stream,
+            self.top_p,
+            self.top_k,
+            self.embedding_encoding_format,
+            self.embedding_dimensions,
+            tools,
+            tool_choice,
+            self.reasoning_effort,
+            self.json_schema,
+        );
+
+        // Wrap with memory capabilities if memory is configured
+        if let Some(memory) = self.memory {
+            let memory_arc = Arc::new(RwLock::new(memory));
+            let provider_arc = Arc::new(provider);
+            Ok(Arc::new(Box::new(ChatWithMemory::new(
+                provider_arc,
+                memory_arc,
+                None,
+                Vec::new(),
+                None,
+            ))))
+        } else {
+            Ok(Arc::new(Box::new(provider)))
+        }
+    }
+}

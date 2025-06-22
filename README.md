@@ -15,12 +15,7 @@
 
 ## Supported Providers
 
-AutoAgents currently supports the **Ollama** provider. The following table summarizes the supported models:
-
-| Provider | Supported Models               |
-|----------|--------------------------------|
-| Ollama   | Llama-3.2, DeepSeek-R1-8B      |
-| OpenAI   | Gpt-4, Gpt-4o                    |
+**multiple LLM backends** in a single project: [OpenAI](https://openai.com), [Anthropic (Claude)](https://www.anthropic.com), [Ollama](https://github.com/ollama/ollama), [DeepSeek](https://www.deepseek.com), [xAI](https://x.ai), [Phind](https://www.phind.com), [Groq](https://www.groq.com), [Google](https://cloud.google.com/gemini).
 
 *Note: Provider support is actively evolving.*
 

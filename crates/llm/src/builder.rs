@@ -9,12 +9,10 @@ use crate::{
         Tool, ToolChoice,
     },
     error::LLMError,
-    memory::{ChatWithMemory, MemoryProvider, SlidingWindowMemory, TrimStrategy},
+    memory::{MemoryProvider, SlidingWindowMemory, TrimStrategy},
     LLMProvider,
 };
-use std::collections::HashMap;
-use std::sync::Arc;
-use tokio::sync::RwLock;
+use std::{collections::HashMap, marker::PhantomData};
 
 /// A function type for validating LLM provider outputs.
 /// Takes a response string and returns Ok(()) if valid, or Err with an error message if invalid.
@@ -94,98 +92,128 @@ impl std::str::FromStr for LLMBackend {
 ///
 /// Provides a fluent interface for setting various configuration options
 /// like model selection, API keys, generation parameters, etc.
-#[derive(Default)]
-pub struct LLMBuilder {
+pub struct LLMBuilder<L: LLMProvider> {
     /// Selected backend provider
-    backend: Option<LLMBackend>,
+    pub(crate) backend: PhantomData<L>,
     /// API key for authentication with the provider
-    api_key: Option<String>,
+    pub(crate) api_key: Option<String>,
     /// Base URL for API requests (primarily for self-hosted instances)
-    base_url: Option<String>,
+    pub(crate) base_url: Option<String>,
     /// Model identifier/name to use
-    model: Option<String>,
+    pub(crate) model: Option<String>,
     /// Maximum tokens to generate in responses
-    max_tokens: Option<u32>,
+    pub(crate) max_tokens: Option<u32>,
     /// Temperature parameter for controlling response randomness (0.0-1.0)
-    temperature: Option<f32>,
+    pub(crate) temperature: Option<f32>,
     /// System prompt/context to guide model behavior
-    system: Option<String>,
+    pub(crate) system: Option<String>,
     /// Request timeout duration in seconds
-    timeout_seconds: Option<u64>,
+    pub(crate) timeout_seconds: Option<u64>,
     /// Whether to enable streaming responses
-    stream: Option<bool>,
+    pub(crate) stream: Option<bool>,
     /// Top-p (nucleus) sampling parameter
-    top_p: Option<f32>,
+    pub(crate) top_p: Option<f32>,
     /// Top-k sampling parameter
-    top_k: Option<u32>,
+    pub(crate) top_k: Option<u32>,
     /// Format specification for embedding outputs
-    embedding_encoding_format: Option<String>,
+    pub(crate) embedding_encoding_format: Option<String>,
     /// Vector dimensions for embedding outputs
-    embedding_dimensions: Option<u32>,
+    pub(crate) embedding_dimensions: Option<u32>,
     /// Optional validation function for response content
-    validator: Option<Box<ValidatorFn>>,
+    pub(crate) validator: Option<Box<ValidatorFn>>,
     /// Number of retry attempts when validation fails
-    validator_attempts: usize,
+    pub(crate) validator_attempts: usize,
     /// Function tools
-    tools: Option<Vec<Tool>>,
+    pub(crate) tools: Option<Vec<Tool>>,
     /// Tool choice
-    tool_choice: Option<ToolChoice>,
+    pub(crate) tool_choice: Option<ToolChoice>,
     /// Enable parallel tool use
-    enable_parallel_tool_use: Option<bool>,
+    pub(crate) enable_parallel_tool_use: Option<bool>,
     /// Enable reasoning
-    reasoning: Option<bool>,
+    pub(crate) reasoning: Option<bool>,
     /// Enable reasoning effort
-    reasoning_effort: Option<String>,
+    pub(crate) reasoning_effort: Option<String>,
     /// reasoning_budget_tokens
-    reasoning_budget_tokens: Option<u32>,
+    pub(crate) reasoning_budget_tokens: Option<u32>,
     /// JSON schema for structured output
-    json_schema: Option<StructuredOutputFormat>,
+    pub(crate) json_schema: Option<StructuredOutputFormat>,
     /// API Version
-    api_version: Option<String>,
+    pub(crate) api_version: Option<String>,
     /// Deployment Id
-    deployment_id: Option<String>,
+    pub(crate) deployment_id: Option<String>,
     /// Voice
-    voice: Option<String>,
+    pub(crate) voice: Option<String>,
     /// Search parameters for providers that support search functionality
-    xai_search_mode: Option<String>,
+    pub(crate) xai_search_mode: Option<String>,
     /// XAI search source type
-    xai_search_source_type: Option<String>,
+    pub(crate) xai_search_source_type: Option<String>,
     /// XAI search excluded websites
-    xai_search_excluded_websites: Option<Vec<String>>,
+    pub(crate) xai_search_excluded_websites: Option<Vec<String>>,
     /// XAI search max results
-    xai_search_max_results: Option<u32>,
+    pub(crate) xai_search_max_results: Option<u32>,
     /// XAI search from date
-    xai_search_from_date: Option<String>,
+    pub(crate) xai_search_from_date: Option<String>,
     /// XAI search to date
-    xai_search_to_date: Option<String>,
+    pub(crate) xai_search_to_date: Option<String>,
     /// Memory provider for conversation history (optional)
-    memory: Option<Box<dyn MemoryProvider>>,
+    pub(crate) memory: Option<Box<dyn MemoryProvider>>,
     /// Use web search
-    openai_enable_web_search: Option<bool>,
+    pub(crate) openai_enable_web_search: Option<bool>,
     /// OpenAI web search context
-    openai_web_search_context_size: Option<String>,
+    pub(crate) openai_web_search_context_size: Option<String>,
     /// OpenAI web search user location type
-    openai_web_search_user_location_type: Option<String>,
+    pub(crate) openai_web_search_user_location_type: Option<String>,
     /// OpenAI web search user location approximate country
-    openai_web_search_user_location_approximate_country: Option<String>,
+    pub(crate) openai_web_search_user_location_approximate_country: Option<String>,
     /// OpenAI web search user location approximate city
-    openai_web_search_user_location_approximate_city: Option<String>,
+    pub(crate) openai_web_search_user_location_approximate_city: Option<String>,
     /// OpenAI web search user location approximate region
-    openai_web_search_user_location_approximate_region: Option<String>,
+    pub(crate) openai_web_search_user_location_approximate_region: Option<String>,
 }
 
-impl LLMBuilder {
+impl<L: LLMProvider> LLMBuilder<L> {
     /// Creates a new empty builder instance with default values.
     pub fn new() -> Self {
         Self {
-            ..Default::default()
+            backend: PhantomData,
+            api_key: None,
+            base_url: None,
+            model: None,
+            max_tokens: None,
+            temperature: None,
+            system: None,
+            timeout_seconds: None,
+            stream: None,
+            top_p: None,
+            top_k: None,
+            embedding_encoding_format: None,
+            embedding_dimensions: None,
+            validator: None,
+            validator_attempts: 0,
+            tools: None,
+            tool_choice: None,
+            enable_parallel_tool_use: None,
+            reasoning: None,
+            reasoning_effort: None,
+            reasoning_budget_tokens: None,
+            json_schema: None,
+            api_version: None,
+            deployment_id: None,
+            voice: None,
+            xai_search_mode: None,
+            xai_search_source_type: None,
+            xai_search_excluded_websites: None,
+            xai_search_max_results: None,
+            xai_search_from_date: None,
+            xai_search_to_date: None,
+            memory: None,
+            openai_enable_web_search: None,
+            openai_web_search_context_size: None,
+            openai_web_search_user_location_type: None,
+            openai_web_search_user_location_approximate_country: None,
+            openai_web_search_user_location_approximate_city: None,
+            openai_web_search_user_location_approximate_region: None,
         }
-    }
-
-    /// Sets the backend provider to use.
-    pub fn backend(mut self, backend: LLMBackend) -> Self {
-        self.backend = Some(backend);
-        self
     }
 
     /// Sets the API key for authentication.
@@ -352,107 +380,6 @@ impl LLMBuilder {
         self
     }
 
-    /// Set the voice.
-    pub fn voice(mut self, voice: impl Into<String>) -> Self {
-        self.voice = Some(voice.into());
-        self
-    }
-
-    /// Enable web search
-    pub fn openai_enable_web_search(mut self, enable: bool) -> Self {
-        self.openai_enable_web_search = Some(enable);
-        self
-    }
-
-    /// Set the web search context
-    pub fn openai_web_search_context_size(mut self, context_size: impl Into<String>) -> Self {
-        self.openai_web_search_context_size = Some(context_size.into());
-        self
-    }
-
-    /// Set the web search user location type
-    pub fn openai_web_search_user_location_type(
-        mut self,
-        location_type: impl Into<String>,
-    ) -> Self {
-        self.openai_web_search_user_location_type = Some(location_type.into());
-        self
-    }
-
-    /// Set the web search user location approximate country
-    pub fn openai_web_search_user_location_approximate_country(
-        mut self,
-        country: impl Into<String>,
-    ) -> Self {
-        self.openai_web_search_user_location_approximate_country = Some(country.into());
-        self
-    }
-
-    /// Set the web search user location approximate city
-    pub fn openai_web_search_user_location_approximate_city(
-        mut self,
-        city: impl Into<String>,
-    ) -> Self {
-        self.openai_web_search_user_location_approximate_city = Some(city.into());
-        self
-    }
-
-    /// Set the web search user location approximate region
-    pub fn openai_web_search_user_location_approximate_region(
-        mut self,
-        region: impl Into<String>,
-    ) -> Self {
-        self.openai_web_search_user_location_approximate_region = Some(region.into());
-        self
-    }
-
-    #[deprecated(note = "Renamed to `xai_search_mode`.")]
-    pub fn search_mode(self, mode: impl Into<String>) -> Self {
-        self.xai_search_mode(mode)
-    }
-
-    /// Sets the search mode for search-enabled providers.
-    pub fn xai_search_mode(mut self, mode: impl Into<String>) -> Self {
-        self.xai_search_mode = Some(mode.into());
-        self
-    }
-
-    /// Adds a search source with optional excluded websites.
-    pub fn xai_search_source(
-        mut self,
-        source_type: impl Into<String>,
-        excluded_websites: Option<Vec<String>>,
-    ) -> Self {
-        self.xai_search_source_type = Some(source_type.into());
-        self.xai_search_excluded_websites = excluded_websites;
-        self
-    }
-
-    /// Sets the maximum number of search results.
-    pub fn xai_max_search_results(mut self, max: u32) -> Self {
-        self.xai_search_max_results = Some(max);
-        self
-    }
-
-    /// Sets the date range for search results.
-    pub fn xai_search_date_range(mut self, from: impl Into<String>, to: impl Into<String>) -> Self {
-        self.xai_search_from_date = Some(from.into());
-        self.xai_search_to_date = Some(to.into());
-        self
-    }
-
-    /// Sets the start date for search results (format: "YYYY-MM-DD").
-    pub fn xai_search_from_date(mut self, date: impl Into<String>) -> Self {
-        self.xai_search_from_date = Some(date.into());
-        self
-    }
-
-    /// Sets the end date for search results (format: "YYYY-MM-DD").
-    pub fn xai_search_to_date(mut self, date: impl Into<String>) -> Self {
-        self.xai_search_to_date = Some(date.into());
-        self
-    }
-
     /// Sets a custom memory provider for storing conversation history.
     ///
     /// # Arguments
@@ -548,346 +475,16 @@ impl LLMBuilder {
         self
     }
 
-    /// Builds and returns a configured LLM provider instance.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if:
-    /// - No backend is specified
-    /// - Required backend feature is not enabled
-    /// - Required configuration like API keys are missing
-    pub fn build(self) -> Result<Box<dyn LLMProvider>, LLMError> {
-        log::debug!(
-            "Building LLM provider. backend={:?} model={:?} tools={} tool_choice={:?} stream={:?} temp={:?} enable_web_search={:?} web_search_context={:?} web_search_user_location_type={:?} web_search_user_location_approximate_country={:?} web_search_user_location_approximate_city={:?} web_search_user_location_approximate_region={:?}",
-            self.backend,
-            self.model,
-            self.tools.as_ref().map(|v| v.len()).unwrap_or(0),
-            self.tool_choice,
-            self.stream,
-            self.temperature,
-            self.openai_enable_web_search,
-            self.openai_web_search_context_size,
-            self.openai_web_search_user_location_type,
-            self.openai_web_search_user_location_approximate_country,
-            self.openai_web_search_user_location_approximate_city,
-            self.openai_web_search_user_location_approximate_region,
-        );
-        let (tools, tool_choice) = self.validate_tool_config()?;
-        let backend = self
-            .backend
-            .ok_or_else(|| LLMError::InvalidRequest("No backend specified".to_string()))?;
-
-        #[allow(unused_variables)]
-        let provider: Box<dyn LLMProvider> = match backend {
-            LLMBackend::OpenAI => {
-                #[cfg(not(feature = "openai"))]
-                return Err(LLMError::InvalidRequest(
-                    "OpenAI feature not enabled".to_string(),
-                ));
-
-                #[cfg(feature = "openai")]
-                {
-                    let key = self.api_key.ok_or_else(|| {
-                        LLMError::InvalidRequest("No API key provided for OpenAI".to_string())
-                    })?;
-                    Box::new(crate::backends::openai::OpenAI::new(
-                        key,
-                        self.base_url,
-                        self.model,
-                        self.max_tokens,
-                        self.temperature,
-                        self.timeout_seconds,
-                        self.system,
-                        self.stream,
-                        self.top_p,
-                        self.top_k,
-                        self.embedding_encoding_format,
-                        self.embedding_dimensions,
-                        tools,
-                        tool_choice,
-                        self.reasoning_effort,
-                        self.json_schema,
-                        self.voice,
-                        self.openai_enable_web_search,
-                        self.openai_web_search_context_size,
-                        self.openai_web_search_user_location_type,
-                        self.openai_web_search_user_location_approximate_country,
-                        self.openai_web_search_user_location_approximate_city,
-                        self.openai_web_search_user_location_approximate_region,
-                    ))
-                }
-            }
-            LLMBackend::Anthropic => {
-                #[cfg(not(feature = "anthropic"))]
-                return Err(LLMError::InvalidRequest(
-                    "Anthropic feature not enabled".to_string(),
-                ));
-
-                #[cfg(feature = "anthropic")]
-                {
-                    let api_key = self.api_key.ok_or_else(|| {
-                        LLMError::InvalidRequest("No API key provided for Anthropic".to_string())
-                    })?;
-
-                    let anthro = crate::backends::anthropic::Anthropic::new(
-                        api_key,
-                        self.model,
-                        self.max_tokens,
-                        self.temperature,
-                        self.timeout_seconds,
-                        self.system,
-                        self.stream,
-                        self.top_p,
-                        self.top_k,
-                        tools,
-                        self.tool_choice,
-                        self.reasoning,
-                        self.reasoning_budget_tokens,
-                    );
-
-                    Box::new(anthro)
-                }
-            }
-            LLMBackend::Ollama => {
-                #[cfg(not(feature = "ollama"))]
-                return Err(LLMError::InvalidRequest(
-                    "Ollama feature not enabled".to_string(),
-                ));
-
-                #[cfg(feature = "ollama")]
-                {
-                    let url = self
-                        .base_url
-                        .unwrap_or("http://localhost:11434".to_string());
-                    let ollama = crate::backends::ollama::Ollama::new(
-                        url,
-                        self.api_key,
-                        self.model,
-                        self.max_tokens,
-                        self.temperature,
-                        self.timeout_seconds,
-                        self.system,
-                        self.stream,
-                        self.top_p,
-                        self.top_k,
-                        self.json_schema,
-                        tools,
-                    );
-                    Box::new(ollama)
-                }
-            }
-            LLMBackend::DeepSeek => {
-                #[cfg(not(feature = "deepseek"))]
-                return Err(LLMError::InvalidRequest(
-                    "DeepSeek feature not enabled".to_string(),
-                ));
-
-                #[cfg(feature = "deepseek")]
-                {
-                    let api_key = self.api_key.ok_or_else(|| {
-                        LLMError::InvalidRequest("No API key provided for DeepSeek".to_string())
-                    })?;
-
-                    let deepseek = crate::backends::deepseek::DeepSeek::new(
-                        api_key,
-                        self.model,
-                        self.max_tokens,
-                        self.temperature,
-                        self.timeout_seconds,
-                        self.system,
-                        self.stream,
-                    );
-
-                    Box::new(deepseek)
-                }
-            }
-            LLMBackend::XAI => {
-                #[cfg(not(feature = "xai"))]
-                return Err(LLMError::InvalidRequest(
-                    "XAI feature not enabled".to_string(),
-                ));
-
-                #[cfg(feature = "xai")]
-                {
-                    let api_key = self.api_key.ok_or_else(|| {
-                        LLMError::InvalidRequest("No API key provided for XAI".to_string())
-                    })?;
-
-                    let xai = crate::backends::xai::XAI::new(
-                        api_key,
-                        self.model,
-                        self.max_tokens,
-                        self.temperature,
-                        self.timeout_seconds,
-                        self.system,
-                        self.stream,
-                        self.top_p,
-                        self.top_k,
-                        self.embedding_encoding_format,
-                        self.embedding_dimensions,
-                        self.json_schema,
-                        self.xai_search_mode,
-                        self.xai_search_source_type,
-                        self.xai_search_excluded_websites,
-                        self.xai_search_max_results,
-                        self.xai_search_from_date,
-                        self.xai_search_to_date,
-                    );
-                    Box::new(xai)
-                }
-            }
-            LLMBackend::Phind => {
-                #[cfg(not(feature = "phind"))]
-                return Err(LLMError::InvalidRequest(
-                    "Phind feature not enabled".to_string(),
-                ));
-
-                #[cfg(feature = "phind")]
-                {
-                    let phind = crate::backends::phind::Phind::new(
-                        self.model,
-                        self.max_tokens,
-                        self.temperature,
-                        self.timeout_seconds,
-                        self.system,
-                        self.stream,
-                        self.top_p,
-                        self.top_k,
-                    );
-                    Box::new(phind)
-                }
-            }
-            LLMBackend::Google => {
-                #[cfg(not(feature = "google"))]
-                return Err(LLMError::InvalidRequest(
-                    "Google feature not enabled".to_string(),
-                ));
-
-                #[cfg(feature = "google")]
-                {
-                    let api_key = self.api_key.ok_or_else(|| {
-                        LLMError::InvalidRequest("No API key provided for Google".to_string())
-                    })?;
-
-                    let google = crate::backends::google::Google::new(
-                        api_key,
-                        self.model,
-                        self.max_tokens,
-                        self.temperature,
-                        self.timeout_seconds,
-                        self.system,
-                        self.stream,
-                        self.top_p,
-                        self.top_k,
-                        self.json_schema,
-                        tools,
-                    );
-                    Box::new(google)
-                }
-            }
-            LLMBackend::Groq => {
-                #[cfg(not(feature = "groq"))]
-                return Err(LLMError::InvalidRequest(
-                    "Groq feature not enabled".to_string(),
-                ));
-
-                #[cfg(feature = "groq")]
-                {
-                    let api_key = self.api_key.ok_or_else(|| {
-                        LLMError::InvalidRequest("No API key provided for Groq".to_string())
-                    })?;
-
-                    let groq = crate::backends::groq::Groq::new(
-                        api_key,
-                        self.model,
-                        self.max_tokens,
-                        self.temperature,
-                        self.timeout_seconds,
-                        self.system,
-                        self.stream,
-                        self.top_p,
-                        self.top_k,
-                    );
-                    Box::new(groq)
-                }
-            }
-            LLMBackend::AzureOpenAI => {
-                #[cfg(not(feature = "azure_openai"))]
-                return Err(LLMError::InvalidRequest(
-                    "OpenAI feature not enabled".to_string(),
-                ));
-
-                #[cfg(feature = "azure_openai")]
-                {
-                    let endpoint = self.base_url.ok_or_else(|| {
-                        LLMError::InvalidRequest("No API endpoint provided for Azure OpenAI".into())
-                    })?;
-
-                    let key = self.api_key.ok_or_else(|| {
-                        LLMError::InvalidRequest("No API key provided for Azure OpenAI".to_string())
-                    })?;
-
-                    let api_version = self.api_version.ok_or_else(|| {
-                        LLMError::InvalidRequest(
-                            "No API version provided for Azure OpenAI".to_string(),
-                        )
-                    })?;
-
-                    let deployment = self.deployment_id.ok_or_else(|| {
-                        LLMError::InvalidRequest(
-                            "No deployment ID provided for Azure OpenAI".into(),
-                        )
-                    })?;
-
-                    Box::new(crate::backends::azure_openai::AzureOpenAI::new(
-                        key,
-                        api_version,
-                        deployment,
-                        endpoint,
-                        self.model,
-                        self.max_tokens,
-                        self.temperature,
-                        self.timeout_seconds,
-                        self.system,
-                        self.stream,
-                        self.top_p,
-                        self.top_k,
-                        self.embedding_encoding_format,
-                        self.embedding_dimensions,
-                        tools,
-                        tool_choice,
-                        self.reasoning_effort,
-                        self.json_schema,
-                    ))
-                }
-            }
-        };
-        let mut final_provider = provider;
-
-        // Wrap with memory capabilities if memory is configured
-        if let Some(memory) = self.memory {
-            let memory_arc = Arc::new(RwLock::new(memory));
-            let provider_arc = Arc::from(final_provider);
-            final_provider = Box::new(ChatWithMemory::new(
-                provider_arc,
-                memory_arc,
-                None,
-                Vec::new(),
-                None,
-            ));
-        }
-
-        Ok(final_provider)
-    }
-
     // Validate that tool configuration is consistent and valid
-    fn validate_tool_config(&self) -> Result<(Option<Vec<Tool>>, Option<ToolChoice>), LLMError> {
+    pub(crate) fn validate_tool_config(
+        &self,
+    ) -> Result<(Option<Vec<Tool>>, Option<ToolChoice>), LLMError> {
         match self.tool_choice {
             Some(ToolChoice::Tool(ref name)) => {
                 match self.tools.clone().map(|tools| tools.iter().any(|tool| tool.function.name == *name)) {
-                    Some(true) => Ok((self.tools.clone(), self.tool_choice.clone())),
-                    _ => Err(LLMError::ToolConfigError(format!("Tool({}) cannot be tool choice: no tool with name {} found.  Did you forget to add it with .function?", name, name))),
-                }
+                        Some(true) => Ok((self.tools.clone(), self.tool_choice.clone())),
+                        _ => Err(LLMError::ToolConfigError(format!("Tool({}) cannot be tool choice: no tool with name {} found.  Did you forget to add it with .function?", name, name))),
+                    }
             }
             Some(_) if self.tools.is_none() => Err(LLMError::ToolConfigError(
                 "Tool choice cannot be set without tools configured".to_string(),
