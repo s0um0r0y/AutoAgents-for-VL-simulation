@@ -1,12 +1,15 @@
 use crate::agent::base::{AgentDeriveT, BaseAgent};
 use crate::agent::executor::{AgentExecutor, TurnResult};
-use crate::session::{Session, Task, ToolCall as ToolCallSession};
+use crate::agent::runnable::AgentState;
+use crate::session::Task;
+use crate::tool::ToolCallResult;
 use async_trait::async_trait;
 use autoagents_llm::chat::{ChatMessage, ChatRole, MessageType, Tool};
 use autoagents_llm::{LLMProvider, ToolCall, ToolT};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::sync::Arc;
+use tokio::sync::Mutex;
 
 /// A simple executor that processes user prompts and handles tool calls
 #[derive(Clone)]
@@ -64,7 +67,7 @@ impl SimpleExecutor {
     async fn process_tool_calls(
         &self,
         tool_calls: Vec<ToolCall>,
-    ) -> Result<Option<ToolCallSession>, SimpleError> {
+    ) -> Result<Option<ToolCallResult>, SimpleError> {
         // // Process each tool call
         if let Some(tool) = tool_calls.first() {
             let arguments = tool.function.arguments.clone();
@@ -72,7 +75,7 @@ impl SimpleExecutor {
                 if tool.function.name == tool_self.name() {
                     let result = tool_self.run(serde_json::from_str(&arguments.clone()).unwrap());
                     // let result = llm.call_tool(tool_name, arguments.clone());
-                    return Ok(Some(ToolCallSession {
+                    return Ok(Some(ToolCallResult {
                         tool_name: tool.function.name.clone(),
                         arguments: arguments.clone().into(),
                         result,
@@ -93,11 +96,11 @@ impl AgentExecutor for SimpleExecutor {
     async fn execute(
         &self,
         llm: Arc<dyn LLMProvider>,
-        session: &mut Session,
         task: Task,
+        state: Arc<Mutex<AgentState>>,
     ) -> Result<Self::Output, Self::Error> {
         // Initialize conversation with system prompt and task
-        let mut previous_chat_history = session.get_history().messages.clone();
+        let mut previous_chat_history = state.lock().await.get_history().messages;
         let messages = vec![
             ChatMessage {
                 role: ChatRole::Assistant,
@@ -122,7 +125,7 @@ impl AgentExecutor for SimpleExecutor {
             }
 
             match self
-                .process_turn(llm.clone(), session, &mut previous_chat_history)
+                .process_turn(llm.clone(), &mut previous_chat_history, state.clone())
                 .await?
             {
                 TurnResult::Complete(output) => return Ok(output),
@@ -142,8 +145,8 @@ impl AgentExecutor for SimpleExecutor {
     async fn process_turn(
         &self,
         llm: Arc<dyn LLMProvider>,
-        session: &mut Session,
         messages: &mut Vec<ChatMessage>,
+        state: Arc<Mutex<AgentState>>,
     ) -> Result<TurnResult<Self::Output>, Self::Error> {
         let has_tools = !self.tools.is_empty();
         let response;
@@ -172,11 +175,12 @@ impl AgentExecutor for SimpleExecutor {
                 message_type: MessageType::Text,
                 content: restult_string,
             });
+            state.lock().await.record_tool_call(result.unwrap());
             // Continue the conversation after tool calls
             return Ok(TurnResult::Continue);
         }
         // Record the final message
-        session.record_conversation(ChatMessage {
+        state.lock().await.record_conversation(ChatMessage {
             role: ChatRole::Assistant,
             message_type: MessageType::Text,
             content: final_response.clone(),

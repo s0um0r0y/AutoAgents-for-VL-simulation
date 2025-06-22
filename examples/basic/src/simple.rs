@@ -1,8 +1,8 @@
-use autoagents::agent::base::AgentDeriveT;
-use autoagents::agent::types::SimpleAgentBuilder;
-use autoagents::environment::Environment;
-use autoagents::protocol::Event;
-use autoagents::{LLMProvider, ToolInputT, ToolT};
+use autoagents::core::agent::base::AgentDeriveT;
+use autoagents::core::agent::types::SimpleAgentBuilder;
+use autoagents::core::environment::Environment;
+use autoagents::core::protocol::Event;
+use autoagents::llm::{LLMProvider, ToolInputT, ToolT};
 use autoagents_derive::{agent, tool, ToolInput};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -46,11 +46,11 @@ pub async fn simple_agent(llm: Arc<dyn LLMProvider>) {
     )
     .build();
 
-    let mut environment = Environment::new(llm, None);
+    let mut environment = Environment::new(llm, None).await;
     let receiver = environment.event_receiver().unwrap();
     handle_events(receiver);
 
-    let agent_id = environment.register_agent(agent, None);
+    let agent_id = environment.register_agent(agent, None).await;
 
     let _ = environment
         .add_task(agent_id, "What is the current weather??")

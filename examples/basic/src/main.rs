@@ -1,7 +1,7 @@
 use clap::{Parser, ValueEnum};
 mod chat;
 mod simple;
-use autoagents::{backends::openai::OpenAI, builder::LLMBuilder};
+use autoagents::{llm::backends::openai::OpenAI, llm::builder::LLMBuilder};
 
 #[derive(Debug, Clone, ValueEnum)]
 enum Model {

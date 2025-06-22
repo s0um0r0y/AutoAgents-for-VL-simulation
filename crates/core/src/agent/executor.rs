@@ -1,4 +1,4 @@
-use crate::session::{Session, Task};
+use crate::session::Task;
 use async_trait::async_trait;
 use autoagents_llm::chat::ChatMessage;
 use autoagents_llm::LLMProvider;
@@ -7,6 +7,9 @@ use serde::Serialize;
 use std::error::Error;
 use std::fmt::Debug;
 use std::sync::Arc;
+use tokio::sync::Mutex;
+
+use super::runnable::AgentState;
 
 /// Result of processing a single turn
 #[derive(Debug)]
@@ -29,16 +32,16 @@ pub trait AgentExecutor: Send + Sync + 'static {
     async fn execute(
         &self,
         llm: Arc<dyn LLMProvider>,
-        session: &mut Session,
         task: Task,
+        state: Arc<Mutex<AgentState>>,
     ) -> Result<Self::Output, Self::Error>;
 
     /// Process a single turn of conversation
     async fn process_turn(
         &self,
         llm: Arc<dyn LLMProvider>,
-        session: &mut Session,
         messages: &mut Vec<ChatMessage>,
+        state: Arc<Mutex<AgentState>>,
     ) -> Result<TurnResult<Self::Output>, Self::Error>;
 
     /// Get the maximum number of turns allowed

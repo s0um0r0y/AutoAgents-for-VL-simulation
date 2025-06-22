@@ -1,7 +1,7 @@
 #![allow(dead_code, unused_imports)]
 use autoagents::{
-    chat::{ChatMessage, ChatRole, MessageType},
-    LLMProvider,
+    llm::chat::{ChatMessage, ChatRole, MessageType},
+    llm::LLMProvider,
 };
 use autoagents_derive::{tool, ToolInput};
 use autoagents_llm::{ToolInputT, ToolT};
