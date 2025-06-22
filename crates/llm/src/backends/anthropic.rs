@@ -10,7 +10,6 @@ use crate::{
     completion::{CompletionProvider, CompletionRequest, CompletionResponse},
     embedding::EmbeddingProvider,
     error::LLMError,
-    memory::ChatWithMemory,
     models::{ModelListRawEntry, ModelListRequest, ModelListResponse, ModelsProvider},
     FunctionCall, LLMProvider, ToolCall,
 };
@@ -21,7 +20,6 @@ use futures::stream::Stream;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use tokio::sync::RwLock;
 
 /// Client for interacting with Anthropic's API.
 ///
@@ -769,19 +767,6 @@ impl LLMBuilder<Anthropic> {
             self.reasoning_budget_tokens,
         );
 
-        // Wrap with memory capabilities if memory is configured
-        if let Some(memory) = self.memory {
-            let memory_arc = Arc::new(RwLock::new(memory));
-            let provider_arc = Arc::new(anthro);
-            Ok(Arc::new(ChatWithMemory::new(
-                provider_arc,
-                memory_arc,
-                None,
-                Vec::new(),
-                None,
-            )))
-        } else {
-            Ok(Arc::new(anthro))
-        }
+        Ok(Arc::new(anthro))
     }
 }

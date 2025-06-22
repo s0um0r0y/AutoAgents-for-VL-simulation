@@ -46,10 +46,6 @@ pub mod secret_store;
 /// Listing models support
 pub mod models;
 
-/// Memory providers for storing and retrieving conversation history
-#[macro_use]
-pub mod memory;
-
 mod tool;
 pub use tool::{ToolInputT, ToolT};
 

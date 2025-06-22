@@ -2,9 +2,6 @@
 //!
 //! This module provides integration with OpenAI's GPT models through their API.
 
-use std::sync::Arc;
-
-#[cfg(feature = "openai")]
 use crate::{
     builder::LLMBackend,
     chat::Tool,
@@ -18,7 +15,6 @@ use crate::{
 use crate::{
     builder::LLMBuilder,
     chat::{ChatResponse, ToolChoice},
-    memory::ChatWithMemory,
     FunctionCall, ToolCall,
 };
 use async_trait::async_trait;
@@ -28,7 +24,7 @@ use futures::stream::Stream;
 use reqwest::{Client, Url};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use tokio::sync::RwLock;
+use std::sync::Arc;
 
 /// Client for interacting with OpenAI's API.
 ///
@@ -999,19 +995,7 @@ impl LLMBuilder<OpenAI> {
             self.openai_web_search_user_location_approximate_city,
             self.openai_web_search_user_location_approximate_region,
         );
-        // Wrap with memory capabilities if memory is configured
-        if let Some(memory) = self.memory {
-            let memory_arc = Arc::new(RwLock::new(memory));
-            let provider_arc = Arc::new(openai);
-            Ok(Arc::new(ChatWithMemory::new(
-                provider_arc,
-                memory_arc,
-                None,
-                Vec::new(),
-                None,
-            )))
-        } else {
-            Ok(Arc::new(openai))
-        }
+
+        Ok(Arc::new(openai))
     }
 }

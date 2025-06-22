@@ -2,14 +2,11 @@
 //!
 //! This module provides integration with DeepSeek's models through their API.
 
-use std::sync::Arc;
-
+use crate::ToolCall;
 use crate::{
     builder::LLMBuilder,
     chat::{ChatResponse, Tool},
-    memory::ChatWithMemory,
 };
-#[cfg(feature = "deepseek")]
 use crate::{
     chat::{ChatMessage, ChatProvider, ChatRole},
     completion::{CompletionProvider, CompletionRequest, CompletionResponse},
@@ -21,9 +18,7 @@ use crate::{
 use async_trait::async_trait;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
-use tokio::sync::RwLock;
-
-use crate::ToolCall;
+use std::sync::Arc;
 
 pub struct DeepSeek {
     pub api_key: String,
@@ -243,19 +238,6 @@ impl LLMBuilder<DeepSeek> {
             self.stream,
         );
 
-        // Wrap with memory capabilities if memory is configured
-        if let Some(memory) = self.memory {
-            let memory_arc = Arc::new(RwLock::new(memory));
-            let provider_arc = Arc::new(deepseek);
-            Ok(Arc::new(ChatWithMemory::new(
-                provider_arc,
-                memory_arc,
-                None,
-                Vec::new(),
-                None,
-            )))
-        } else {
-            Ok(Arc::new(deepseek))
-        }
+        Ok(Arc::new(deepseek))
     }
 }

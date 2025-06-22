@@ -4,12 +4,6 @@ mod simple;
 use autoagents::{llm::backends::openai::OpenAI, llm::builder::LLMBuilder};
 
 #[derive(Debug, Clone, ValueEnum)]
-enum Model {
-    OpenAI,
-    Ollama,
-}
-
-#[derive(Debug, Clone, ValueEnum)]
 enum UseCase {
     Simple,
 }

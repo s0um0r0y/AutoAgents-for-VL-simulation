@@ -41,8 +41,6 @@
 //! }
 //! ```
 
-use std::sync::Arc;
-
 use crate::{
     builder::LLMBuilder,
     chat::{
@@ -52,7 +50,6 @@ use crate::{
     completion::{CompletionProvider, CompletionRequest, CompletionResponse},
     embedding::EmbeddingProvider,
     error::LLMError,
-    memory::ChatWithMemory,
     models::ModelsProvider,
     FunctionCall, LLMProvider, ToolCall,
 };
@@ -62,7 +59,7 @@ use futures::stream::Stream;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use tokio::sync::RwLock;
+use std::sync::Arc;
 
 /// Client for interacting with Google's Gemini API.
 ///
@@ -1070,19 +1067,7 @@ impl LLMBuilder<Google> {
             self.json_schema,
             tools,
         );
-        // Wrap with memory capabilities if memory is configured
-        if let Some(memory) = self.memory {
-            let memory_arc = Arc::new(RwLock::new(memory));
-            let provider_arc = Arc::new(google);
-            Ok(Arc::new(ChatWithMemory::new(
-                provider_arc,
-                memory_arc,
-                None,
-                Vec::new(),
-                None,
-            )))
-        } else {
-            Ok(Arc::new(google))
-        }
+
+        Ok(Arc::new(google))
     }
 }

@@ -1,14 +1,10 @@
-use std::sync::Arc;
-
+/// Implementation of the Phind LLM provider.
+/// This module provides integration with Phind's language model API.
 use crate::{
     builder::LLMBuilder,
     chat::{ChatResponse, Tool},
-    memory::ChatWithMemory,
     ToolCall,
 };
-/// Implementation of the Phind LLM provider.
-/// This module provides integration with Phind's language model API.
-#[cfg(feature = "phind")]
 use crate::{
     chat::{ChatMessage, ChatProvider, ChatRole},
     completion::{CompletionProvider, CompletionRequest, CompletionResponse},
@@ -22,7 +18,7 @@ use reqwest::header::{HeaderMap, HeaderValue};
 use reqwest::StatusCode;
 use reqwest::{Client, Response};
 use serde_json::{json, Value};
-use tokio::sync::RwLock;
+use std::sync::Arc;
 
 /// Represents a Phind LLM client with configuration options.
 pub struct Phind {
@@ -310,19 +306,7 @@ impl LLMBuilder<Phind> {
             self.top_p,
             self.top_k,
         );
-        // Wrap with memory capabilities if memory is configured
-        if let Some(memory) = self.memory {
-            let memory_arc = Arc::new(RwLock::new(memory));
-            let provider_arc = Arc::new(phind);
-            Ok(Arc::new(ChatWithMemory::new(
-                provider_arc,
-                memory_arc,
-                None,
-                Vec::new(),
-                None,
-            )))
-        } else {
-            Ok(Arc::new(phind))
-        }
+
+        Ok(Arc::new(phind))
     }
 }

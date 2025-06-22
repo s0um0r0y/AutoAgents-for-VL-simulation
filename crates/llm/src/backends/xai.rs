@@ -3,15 +3,11 @@
 //! This module provides integration with X.AI's models through their API.
 //! It implements chat and completion capabilities using the X.AI API endpoints.
 
-use std::sync::Arc;
-
 use crate::{
     builder::LLMBuilder,
     chat::{ChatResponse, Tool},
-    memory::ChatWithMemory,
     ToolCall,
 };
-#[cfg(feature = "xai")]
 use crate::{
     chat::{ChatMessage, ChatProvider, ChatRole, StructuredOutputFormat},
     completion::{CompletionProvider, CompletionRequest, CompletionResponse},
@@ -24,7 +20,7 @@ use async_trait::async_trait;
 use futures::stream::Stream;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
-use tokio::sync::RwLock;
+use std::sync::Arc;
 
 /// Client for interacting with X.AI's API.
 ///
@@ -665,19 +661,7 @@ impl LLMBuilder<XAI> {
             self.xai_search_from_date,
             self.xai_search_to_date,
         );
-        // Wrap with memory capabilities if memory is configured
-        if let Some(memory) = self.memory {
-            let memory_arc = Arc::new(RwLock::new(memory));
-            let provider_arc = Arc::new(xai);
-            Ok(Arc::new(ChatWithMemory::new(
-                provider_arc,
-                memory_arc,
-                None,
-                Vec::new(),
-                None,
-            )))
-        } else {
-            Ok(Arc::new(xai))
-        }
+
+        Ok(Arc::new(xai))
     }
 }
