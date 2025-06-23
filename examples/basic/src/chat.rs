@@ -1,10 +1,10 @@
 #![allow(dead_code, unused_imports)]
 use autoagents::{
-    llm::{ChatMessage, ChatRole, TextGenerationOptions, LLM},
-    providers::ollama::{model::OllamaModel, Ollama},
-    tool::{Tool, ToolInputT},
+    llm::chat::{ChatMessage, ChatRole, MessageType},
+    llm::LLMProvider,
 };
 use autoagents_derive::{tool, ToolInput};
+use autoagents_llm::{ToolInputT, ToolT};
 use futures::stream::StreamExt;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -24,23 +24,26 @@ fn get_current_weather(_args: GetCurrentWeatherArgs) -> String {
     format!("Current Time is {:?}", SystemTime::now())
 }
 
-pub async fn stream(mut llm: impl LLM) {
-    llm.register_tool(Box::new(GetCurrentWeather));
+pub async fn stream(llm: impl LLMProvider) {
+    // llm.register_tool(Box::new(GetCurrentWeather));
     let mut stream = llm
-        .chat_completion_stream(
+        .chat_stream(
             vec![
                 ChatMessage {
-                    role: ChatRole::System,
+                    role: ChatRole::Assistant,
+                    message_type: MessageType::Text,
                     content: "You are an Assistant and your name is Lilly".into(),
                 },
                 ChatMessage {
                     role: ChatRole::User,
+                    message_type: MessageType::Text,
                     content: "Hello!".into(),
                 },
-            ],
-            None,
+            ]
+            .as_slice(),
         )
-        .await;
+        .await
+        .unwrap();
 
     // Iterate over the stream as chunks arrive.
     while let Some(chunk) = stream.next().await {

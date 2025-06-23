@@ -26,7 +26,7 @@ impl ToolParser {
 
             pub struct #tool_struct_ident;
 
-            impl Tool for #tool_struct_ident {
+            impl ToolT for #tool_struct_ident {
                 fn name(&self) -> &'static str {
                     #tool_name_literal
                 }

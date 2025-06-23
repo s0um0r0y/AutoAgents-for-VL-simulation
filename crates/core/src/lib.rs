@@ -1,7 +1,7 @@
 pub mod agent;
 pub mod environment;
-mod error;
+pub mod error;
+// mod memory;
 pub mod protocol;
 pub mod session;
-
-pub use error::SessionError;
+pub mod tool;

@@ -1,85 +1,102 @@
+use super::base::BaseAgent;
+use super::executor::AgentExecutor;
+use super::result::AgentRunResult;
+use crate::error::Error;
 use crate::protocol::Event;
-use crate::session::{Session, Task};
+use crate::session::Task;
+use crate::tool::ToolCallResult;
 use async_trait::async_trait;
+use autoagents_llm::chat::ChatMessage;
 use serde_json::Value;
 use std::sync::Arc;
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, Mutex};
 use tokio::task::JoinHandle;
 use uuid::Uuid;
 
-use super::runner::AgentRunner;
+#[derive(Debug, Default, Clone)]
+pub struct History {
+    pub messages: Vec<ChatMessage>,
+    pub tool_calls: Vec<ToolCallResult>,
+    pub tasks: Vec<Task>,
+}
 
-/// A trait for agents that can be run by the Environment without exposing executor details
-#[async_trait]
-pub trait RunnableAgent: Send + Sync + 'static {
-    /// Get the agent's name
-    fn name(&self) -> &str;
+#[derive(Default)]
+pub struct AgentState {
+    history: History,
+}
 
-    /// Get the agent's description
-    fn description(&self) -> &str;
+impl AgentState {
+    pub(crate) fn get_history(&self) -> History {
+        self.history.clone()
+    }
 
-    /// Get the agent's unique ID
-    fn id(&self) -> Uuid;
+    pub(crate) fn record_conversation(&mut self, message: ChatMessage) {
+        self.history.messages.push(message);
+    }
 
-    /// Run the agent with the provided session and event channel
-    /// The implementation is responsible for handling the specific LLM type
-    async fn run(
-        self: Arc<Self>,
-        session: Session,
-        task: Task,
-        tx_event: mpsc::Sender<Event>,
-    ) -> Result<Value, Box<dyn std::error::Error + Send + Sync>>;
-
-    /// Create a task handle for running this agent
-    fn spawn_task(
-        self: Arc<Self>,
-        session: Session,
-        task: Task,
-        tx_event: mpsc::Sender<Event>,
-    ) -> JoinHandle<Result<Value, Box<dyn std::error::Error + Send + Sync>>> {
-        tokio::spawn(async move { self.run(session, task, tx_event).await })
+    pub(crate) fn record_tool_call(&mut self, tool_call: ToolCallResult) {
+        self.history.tool_calls.push(tool_call);
     }
 }
 
-/// Wrapper that makes a BaseAgent<E> implement RunnableAgent for a specific LLM type
-pub struct RunnableAgentImpl<E, L>
+/// RunnableAgent trait with concrete Output and Error types for easier trait object usage
+#[async_trait]
+pub trait RunnableAgent: Send + Sync + 'static {
+    fn name(&self) -> &str;
+    fn prompt(&self) -> &str;
+    fn id(&self) -> Uuid;
+
+    async fn run(
+        self: Arc<Self>,
+        task: Task,
+        tx_event: mpsc::Sender<Event>,
+    ) -> Result<AgentRunResult, Error>;
+
+    fn spawn_task(
+        self: Arc<Self>,
+        task: Task,
+        tx_event: mpsc::Sender<Event>,
+    ) -> JoinHandle<Result<AgentRunResult, Error>> {
+        tokio::spawn(async move { self.run(task, tx_event).await })
+    }
+}
+
+/// Concrete RunnableAgent implementation wrapping BaseAgent<E>
+pub struct RunnableAgentImpl<E>
 where
-    E: crate::agent::executor::AgentExecutor + Clone + Send + Sync + 'static,
-    L: autoagents_llm::llm::LLM + Clone + 'static,
+    E: AgentExecutor,
 {
-    agent: crate::agent::base::BaseAgent<E>,
-    llm: L,
+    agent: BaseAgent<E>,
+    state: Arc<Mutex<AgentState>>,
     id: Uuid,
 }
 
-impl<E, L> RunnableAgentImpl<E, L>
+impl<E> RunnableAgentImpl<E>
 where
-    E: crate::agent::executor::AgentExecutor + Clone + Send + Sync + 'static,
-    L: autoagents_llm::llm::LLM + Clone + 'static,
+    E: AgentExecutor,
 {
-    pub fn new(agent: crate::agent::base::BaseAgent<E>, llm: L) -> Self {
+    pub fn new(agent: BaseAgent<E>) -> Self {
         Self {
             agent,
-            llm,
+            state: Arc::new(Mutex::new(AgentState::default())),
             id: Uuid::new_v4(),
         }
     }
 }
 
 #[async_trait]
-impl<E, L> RunnableAgent for RunnableAgentImpl<E, L>
+impl<E> RunnableAgent for RunnableAgentImpl<E>
 where
-    E: crate::agent::executor::AgentExecutor + Clone + Send + Sync + 'static,
-    E::Output: Into<Value> + Send,
+    E: AgentExecutor,
+    E::Output: Into<Value> + Send + Sync,
     E::Error: std::error::Error + Send + Sync + 'static,
-    L: autoagents_llm::llm::LLM + Clone + 'static,
 {
     fn name(&self) -> &str {
         &self.agent.name
     }
 
-    fn description(&self) -> &str {
-        &self.agent.description
+    fn prompt(&self) -> &str {
+        &self.agent.prompt
     }
 
     fn id(&self) -> Uuid {
@@ -88,37 +105,58 @@ where
 
     async fn run(
         self: Arc<Self>,
-        session: Session,
         task: Task,
         tx_event: mpsc::Sender<Event>,
-    ) -> Result<Value, Box<dyn std::error::Error + Send + Sync>> {
-        // Execute the agent
-        let runner = AgentRunner::new(self.agent.clone(), tx_event);
-        runner
-            .run(self.llm.clone(), session, task)
-            .await
-            .map(Into::into)
-            .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)
+    ) -> Result<AgentRunResult, Error> {
+        let llm = self.agent.llm.clone();
+        let result = self
+            .agent
+            .executor
+            .execute(llm, task.clone(), self.state.clone())
+            .await;
+
+        // Convert result to unified types (Value and boxed error)
+        let task_result = match &result {
+            Ok(val) => crate::protocol::TaskResult::Value(
+                serde_json::to_value(val).unwrap_or(serde_json::Value::Null),
+            ),
+            Err(err) => crate::protocol::TaskResult::Failure(err.to_string()),
+        };
+
+        let _ = tx_event
+            .send(Event::TaskComplete {
+                sub_id: task.submission_id,
+                result: task_result,
+            })
+            .await;
+
+        match result {
+            Ok(val) => Ok(AgentRunResult::success(val.into())),
+            Err(e) => Ok(AgentRunResult::failure(e.to_string())),
+        }
     }
 }
 
-/// Builder for creating runnable agents
-pub struct RunnableAgentBuilder<L: autoagents_llm::llm::LLM + Clone + 'static> {
-    llm: L,
+/// Builder for runnable agents
+pub struct RunnableAgentBuilder {}
+
+impl Default for RunnableAgentBuilder {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
-impl<L: autoagents_llm::llm::LLM + Clone + 'static> RunnableAgentBuilder<L> {
-    pub fn new(llm: L) -> Self {
-        Self { llm }
+impl RunnableAgentBuilder {
+    pub fn new() -> Self {
+        Self {}
     }
 
-    /// Build a runnable agent from a BaseAgent
-    pub fn build<E>(self, agent: crate::agent::base::BaseAgent<E>) -> Arc<dyn RunnableAgent>
+    pub fn build<E>(self, agent: BaseAgent<E>) -> Arc<dyn RunnableAgent>
     where
-        E: crate::agent::executor::AgentExecutor + Clone + Send + Sync + 'static,
-        E::Output: Into<Value> + Send,
+        E: AgentExecutor,
+        E::Output: Into<Value> + Send + Sync,
         E::Error: std::error::Error + Send + Sync + 'static,
     {
-        Arc::new(RunnableAgentImpl::new(agent, self.llm))
+        Arc::new(RunnableAgentImpl::new(agent))
     }
 }

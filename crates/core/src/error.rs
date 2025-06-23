@@ -1,20 +1,11 @@
-use uuid::Uuid;
+use crate::{agent::error::AgentError, environment::EnvironmentError, session::SessionError};
 
-/// Error types for Environment operations
 #[derive(Debug, thiserror::Error)]
-pub enum SessionError {
-    #[error("Agent not found: {0}")]
-    AgentNotFound(Uuid),
-
-    #[error("Task execution failed: {0}")]
-    TaskExecutionFailed(String),
-
-    #[error("Channel error: {0}")]
-    ChannelError(String),
-
-    #[error("Runtime error: {0}")]
-    RuntimeError(String),
-
-    #[error("No task set for agent: {0}")]
-    NoTaskSet(Uuid),
+pub enum Error {
+    #[error(transparent)]
+    EnvironmentError(#[from] EnvironmentError),
+    #[error(transparent)]
+    SessionError(#[from] SessionError),
+    #[error(transparent)]
+    AgentError(#[from] AgentError),
 }

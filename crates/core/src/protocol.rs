@@ -1,4 +1,4 @@
-use autoagents_llm::llm::ChatMessage;
+use autoagents_llm::chat::ChatMessage;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use uuid::Uuid;

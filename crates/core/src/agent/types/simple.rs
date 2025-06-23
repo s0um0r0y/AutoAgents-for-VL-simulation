@@ -1,12 +1,15 @@
 use crate::agent::base::{AgentDeriveT, BaseAgent};
 use crate::agent::executor::{AgentExecutor, TurnResult};
-use crate::session::{Session, Task, ToolCall};
+use crate::agent::runnable::AgentState;
+use crate::session::Task;
+use crate::tool::ToolCallResult;
 use async_trait::async_trait;
-use autoagents_llm::llm::{ChatCompletionResponse, ChatMessage, ChatRole, LLM};
-use autoagents_llm::tool::Tool;
+use autoagents_llm::chat::{ChatMessage, ChatRole, MessageType, Tool};
+use autoagents_llm::{LLMProvider, ToolCall, ToolT};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::sync::Arc;
+use tokio::sync::Mutex;
 
 /// A simple executor that processes user prompts and handles tool calls
 #[derive(Clone)]
@@ -16,7 +19,7 @@ pub struct SimpleExecutor {
     /// Maximum number of turns
     max_turns: usize,
     /// Tools available to this executor
-    tools: Vec<Arc<dyn Tool>>,
+    tools: Vec<Arc<Box<dyn ToolT>>>,
 }
 
 /// Output type for the simple executor
@@ -46,11 +49,11 @@ pub enum SimpleError {
 
 impl SimpleExecutor {
     /// Create a new simple executor
-    pub fn new(system_prompt: String) -> Self {
+    pub fn new(system_prompt: String, tools: Vec<Arc<Box<dyn ToolT>>>) -> Self {
         Self {
             system_prompt,
             max_turns: 10,
-            tools: vec![],
+            tools,
         }
     }
 
@@ -60,39 +63,25 @@ impl SimpleExecutor {
         self
     }
 
-    /// Add a tool to this executor
-    pub fn with_tool(mut self, tool: Arc<dyn Tool>) -> Self {
-        self.tools.push(tool);
-        self
-    }
-
     /// Process tool calls from the LLM response
-    async fn process_tool_calls<T: LLM>(
+    async fn process_tool_calls(
         &self,
-        llm: &T,
-        response: &ChatCompletionResponse,
-        session: &mut Session,
-        messages: &mut Vec<ChatMessage>,
-    ) -> Result<Option<ToolCall>, SimpleError> {
-        // Add the assistant's message to the conversation
-        let assistant_message = ChatMessage {
-            role: ChatRole::Assistant,
-            content: response.message.content.clone(),
-        };
-
-        session.record_conversation(assistant_message.clone());
-        messages.push(assistant_message);
-
-        // Process each tool call
-        if let Some(tool_call) = &response.message.tool_calls.first() {
-            let tool_name = &tool_call.function.name;
-            let arguments = &tool_call.function.arguments;
-            let result = llm.call_tool(tool_name, arguments.clone());
-            return Ok(Some(ToolCall {
-                tool_name: tool_name.clone(),
-                arguments: arguments.clone(),
-                result: result.unwrap(),
-            }));
+        tool_calls: Vec<ToolCall>,
+    ) -> Result<Option<ToolCallResult>, SimpleError> {
+        // // Process each tool call
+        if let Some(tool) = tool_calls.first() {
+            let arguments = tool.function.arguments.clone();
+            for tool_self in self.tools.clone() {
+                if tool.function.name == tool_self.name() {
+                    let result = tool_self.run(serde_json::from_str(&arguments.clone()).unwrap());
+                    // let result = llm.call_tool(tool_name, arguments.clone());
+                    return Ok(Some(ToolCallResult {
+                        tool_name: tool.function.name.clone(),
+                        arguments: arguments.clone().into(),
+                        result,
+                    }));
+                }
+            }
         }
 
         Ok(None)
@@ -104,21 +93,23 @@ impl AgentExecutor for SimpleExecutor {
     type Output = Value;
     type Error = SimpleError;
 
-    async fn execute<L: LLM + Clone + 'static>(
+    async fn execute(
         &self,
-        llm: &L,
-        session: &mut Session,
+        llm: Arc<dyn LLMProvider>,
         task: Task,
+        state: Arc<Mutex<AgentState>>,
     ) -> Result<Self::Output, Self::Error> {
         // Initialize conversation with system prompt and task
-        let mut previous_chat_history = session.get_history().messages.clone();
+        let mut previous_chat_history = state.lock().await.get_history().messages;
         let messages = vec![
             ChatMessage {
-                role: ChatRole::System,
+                role: ChatRole::Assistant,
+                message_type: MessageType::Text,
                 content: self.system_prompt.clone(),
             },
             ChatMessage {
                 role: ChatRole::User,
+                message_type: MessageType::Text,
                 content: task.prompt,
             },
         ];
@@ -134,7 +125,7 @@ impl AgentExecutor for SimpleExecutor {
             }
 
             match self
-                .process_turn(llm, session, &mut previous_chat_history)
+                .process_turn(llm.clone(), &mut previous_chat_history, state.clone())
                 .await?
             {
                 TurnResult::Complete(output) => return Ok(output),
@@ -142,7 +133,8 @@ impl AgentExecutor for SimpleExecutor {
                 TurnResult::Error(e) => {
                     // Add error to conversation and continue
                     previous_chat_history.push(ChatMessage {
-                        role: ChatRole::System,
+                        role: ChatRole::Assistant,
+                        message_type: MessageType::Text,
                         content: format!("Error occurred: {}", e),
                     });
                 }
@@ -150,44 +142,49 @@ impl AgentExecutor for SimpleExecutor {
         }
     }
 
-    async fn process_turn<L: LLM + Clone + 'static>(
+    async fn process_turn(
         &self,
-        llm: &L,
-        session: &mut Session,
+        llm: Arc<dyn LLMProvider>,
         messages: &mut Vec<ChatMessage>,
+        state: Arc<Mutex<AgentState>>,
     ) -> Result<TurnResult<Self::Output>, Self::Error> {
-        // Call the LLM
-        let response = llm
-            .chat_completion(messages.clone(), None)
-            .await
-            .map_err(|e| SimpleError::LLMError(e.to_string()))?;
+        let has_tools = !self.tools.is_empty();
+        let response = if has_tools {
+            let tools = self.tools.iter().map(Tool::from).collect::<Vec<_>>();
+            llm.chat_with_tools(messages.as_slice(), Some(tools.as_slice()))
+                .await
+        } else {
+            // Call the LLM
+            llm.chat(messages.as_slice()).await
+        };
+
+        let response_mapped = response.map_err(|e| SimpleError::LLMError(e.to_string()))?;
 
         // Check if the response contains tool calls
-        if !response.message.tool_calls.is_empty() {
-            let mut tool_calls = Vec::new();
-            let result = self
-                .process_tool_calls(llm, &response, session, messages)
-                .await?;
+        let final_response = if response_mapped.tool_calls().is_none() {
+            // No tool calls, this is the final response
+            response_mapped.text().clone().unwrap()
+        } else {
+            let tool_calls = response_mapped.tool_calls().unwrap();
+            let result = self.process_tool_calls(tool_calls).await.unwrap();
             let restult_string = result.clone().unwrap().result.to_string();
-            tool_calls.push(result);
             messages.push(ChatMessage {
                 role: ChatRole::Assistant,
+                message_type: MessageType::Text,
                 content: restult_string,
             });
+            state.lock().await.record_tool_call(result.unwrap());
             // Continue the conversation after tool calls
-            Ok(TurnResult::Continue)
-        } else {
-            // No tool calls, this is the final response
-            let final_response = response.message.content.clone();
+            return Ok(TurnResult::Continue);
+        };
+        // Record the final message
+        state.lock().await.record_conversation(ChatMessage {
+            role: ChatRole::Assistant,
+            message_type: MessageType::Text,
+            content: final_response.clone(),
+        });
 
-            // Record the final message
-            session.record_conversation(ChatMessage {
-                role: ChatRole::Assistant,
-                content: final_response.clone(),
-            });
-
-            Ok(TurnResult::Complete(final_response.into()))
-        }
+        Ok(TurnResult::Complete(final_response.into()))
     }
 
     fn max_turns(&self) -> usize {
@@ -198,45 +195,58 @@ impl AgentExecutor for SimpleExecutor {
 /// Builder for creating Simple agents
 pub struct SimpleAgentBuilder {
     name: String,
-    description: String,
     executor: SimpleExecutor,
-    tools: Vec<Arc<dyn Tool>>,
+    prompt: String,
+    tools: Vec<Arc<Box<dyn ToolT>>>,
+    llm: Option<Arc<dyn LLMProvider>>,
 }
 
 impl SimpleAgentBuilder {
     pub fn new(name: impl Into<String>, system_prompt: String) -> Self {
         Self {
             name: name.into(),
-            description: String::new(),
-            executor: SimpleExecutor::new(system_prompt),
+            prompt: String::new(),
+            executor: SimpleExecutor::new(system_prompt, vec![]),
             tools: Vec::new(),
+            llm: None,
         }
     }
 
-    pub fn from_agent<T: AgentDeriveT>(a: T, system_prompt: String) -> Self {
+    pub fn from_agent<T: AgentDeriveT>(agent: T) -> Self {
+        let tools: Vec<Arc<Box<dyn ToolT>>> = agent
+            .tools()
+            .into_iter()
+            .map(|tool| {
+                let boxed: Box<dyn ToolT> = tool;
+                let arc: Arc<Box<dyn ToolT>> = Arc::new(boxed);
+                arc
+            })
+            .collect();
         Self {
-            name: a.name().into(),
-            description: a.description().into(),
-            executor: SimpleExecutor::new(system_prompt),
-            tools: a
-                .tools()
-                .into_iter()
-                .map(|tool| {
-                    let boxed: Box<dyn Tool> = tool;
-                    let arc: Arc<dyn Tool> = boxed.into();
-                    arc
-                })
-                .collect(),
+            name: agent.name().into(),
+            prompt: agent.prompt().into(),
+            executor: SimpleExecutor::new(agent.prompt().into(), tools.clone()),
+            tools,
+            llm: None,
         }
     }
 
-    pub fn description(mut self, desc: impl Into<String>) -> Self {
-        self.description = desc.into();
+    pub fn with_llm(mut self, llm: Arc<dyn LLMProvider>) -> Self {
+        self.llm = Some(llm);
         self
     }
 
-    pub fn build(self) -> BaseAgent<SimpleExecutor> {
-        BaseAgent::new(self.name, self.description, self.executor, self.tools)
+    pub fn build(self) -> Result<BaseAgent<SimpleExecutor>, SimpleError> {
+        let llm = self
+            .llm
+            .ok_or_else(|| SimpleError::LLMError("LLm is not set".into()))?;
+        Ok(BaseAgent::new(
+            self.name,
+            self.prompt,
+            self.executor,
+            self.tools,
+            llm,
+        ))
     }
 }
 
@@ -246,8 +256,8 @@ mod tests {
 
     #[test]
     fn test_simple_executor_creation() {
-        let executor =
-            SimpleExecutor::new("You are a helpful assistant".to_string()).with_max_turns(5);
+        let executor = SimpleExecutor::new("You are a helpful assistant".to_string(), vec![])
+            .with_max_turns(5);
 
         assert_eq!(executor.max_turns(), 5);
     }

@@ -8,6 +8,41 @@ repository.workspace = true
 keywords.workspace = true
 categories.workspace = true
 
+[features]
+default = [
+    "openai",
+    "anthropic",
+    "ollama",
+    "deepseek",
+    "xai",
+    "phind",
+    "google",
+    "groq",
+    "azure_openai",
+]
+full = [
+    "openai",
+    "anthropic",
+    "ollama",
+    "deepseek",
+    "xai",
+    "phind",
+    "google",
+    "groq",
+    "azure_openai",
+]
+openai = []
+anthropic = []
+ollama = []
+deepseek = []
+xai = []
+phind = []
+google = []
+groq = []
+azure_openai = []
+logging = ["dep:env_logger"]
+
+
 [dependencies]
 tokio = { workspace = true }
 async-trait = { workspace = true }
@@ -20,3 +55,10 @@ tokio-stream = { workspace = true }
 thiserror = { workspace = true }
 futures = { workspace = true }
 ureq = { workspace = true }
+log = { workspace = true }
+env_logger = { workspace = true, optional = true }
+chrono = { workspace = true }
+dirs = { workspace = true }
+regex = { workspace = true }
+base64 = "0.22.1"
+either = { version = "1.15.0", features = ["serde"] }
