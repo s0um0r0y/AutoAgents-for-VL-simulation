@@ -1,19 +1,16 @@
+use super::base::BaseAgent;
+use super::executor::AgentExecutor;
+use super::result::AgentRunResult;
+use crate::protocol::Event;
+use crate::session::Task;
+use crate::tool::ToolCallResult;
 use async_trait::async_trait;
+use autoagents_llm::chat::ChatMessage;
 use serde_json::Value;
 use std::sync::Arc;
 use tokio::sync::{mpsc, Mutex};
 use tokio::task::JoinHandle;
 use uuid::Uuid;
-
-use crate::protocol::Event;
-use crate::session::Task;
-use crate::tool::ToolCallResult;
-use autoagents_llm::chat::ChatMessage;
-use autoagents_llm::LLMProvider;
-
-use super::base::BaseAgent;
-use super::executor::AgentExecutor;
-use super::result::AgentRunResult;
 
 #[derive(Debug, Default, Clone)]
 pub struct History {
@@ -45,31 +42,29 @@ impl AgentState {
 #[async_trait]
 pub trait RunnableAgent: Send + Sync + 'static {
     fn name(&self) -> &str;
-    fn description(&self) -> &str;
+    fn prompt(&self) -> &str;
     fn id(&self) -> Uuid;
 
     async fn run(
         self: Arc<Self>,
         task: Task,
-        llm: Arc<dyn LLMProvider>,
         tx_event: mpsc::Sender<Event>,
     ) -> Result<AgentRunResult, Box<dyn std::error::Error + Send + Sync + 'static>>;
 
     fn spawn_task(
         self: Arc<Self>,
         task: Task,
-        llm: Arc<dyn LLMProvider>,
         tx_event: mpsc::Sender<Event>,
     ) -> JoinHandle<Result<AgentRunResult, Box<dyn std::error::Error + Send + Sync + 'static>>>
     {
-        tokio::spawn(async move { self.run(task, llm, tx_event).await })
+        tokio::spawn(async move { self.run(task, tx_event).await })
     }
 }
 
 /// Concrete RunnableAgent implementation wrapping BaseAgent<E>
 pub struct RunnableAgentImpl<E>
 where
-    E: AgentExecutor + Clone + Send + Sync + 'static,
+    E: AgentExecutor,
 {
     agent: BaseAgent<E>,
     state: Arc<Mutex<AgentState>>,
@@ -78,7 +73,7 @@ where
 
 impl<E> RunnableAgentImpl<E>
 where
-    E: AgentExecutor + Clone + Send + Sync + 'static,
+    E: AgentExecutor,
 {
     pub fn new(agent: BaseAgent<E>) -> Self {
         Self {
@@ -92,7 +87,7 @@ where
 #[async_trait]
 impl<E> RunnableAgent for RunnableAgentImpl<E>
 where
-    E: AgentExecutor + Clone + Send + Sync + 'static,
+    E: AgentExecutor,
     E::Output: Into<Value> + Send + Sync,
     E::Error: std::error::Error + Send + Sync + 'static,
 {
@@ -100,8 +95,8 @@ where
         &self.agent.name
     }
 
-    fn description(&self) -> &str {
-        &self.agent.description
+    fn prompt(&self) -> &str {
+        &self.agent.prompt
     }
 
     fn id(&self) -> Uuid {
@@ -111,9 +106,9 @@ where
     async fn run(
         self: Arc<Self>,
         task: Task,
-        llm: Arc<dyn LLMProvider>,
         tx_event: mpsc::Sender<Event>,
     ) -> Result<AgentRunResult, Box<dyn std::error::Error + Send + Sync + 'static>> {
+        let llm = self.agent.llm.clone();
         let result = self
             .agent
             .executor
@@ -158,7 +153,7 @@ impl RunnableAgentBuilder {
 
     pub fn build<E>(self, agent: BaseAgent<E>) -> Arc<dyn RunnableAgent>
     where
-        E: AgentExecutor + Clone + Send + Sync + 'static,
+        E: AgentExecutor,
         E::Output: Into<Value> + Send + Sync,
         E::Error: std::error::Error + Send + Sync + 'static,
     {

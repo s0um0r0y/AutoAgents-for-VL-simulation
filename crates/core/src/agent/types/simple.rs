@@ -197,22 +197,24 @@ impl AgentExecutor for SimpleExecutor {
 /// Builder for creating Simple agents
 pub struct SimpleAgentBuilder {
     name: String,
-    description: String,
     executor: SimpleExecutor,
+    prompt: String,
     tools: Vec<Arc<Box<dyn ToolT>>>,
+    llm: Option<Arc<dyn LLMProvider>>,
 }
 
 impl SimpleAgentBuilder {
     pub fn new(name: impl Into<String>, system_prompt: String) -> Self {
         Self {
             name: name.into(),
-            description: String::new(),
+            prompt: String::new(),
             executor: SimpleExecutor::new(system_prompt, vec![]),
             tools: Vec::new(),
+            llm: None,
         }
     }
 
-    pub fn from_agent<T: AgentDeriveT>(agent: T, system_prompt: String) -> Self {
+    pub fn from_agent<T: AgentDeriveT>(agent: T) -> Self {
         let tools: Vec<Arc<Box<dyn ToolT>>> = agent
             .tools()
             .into_iter()
@@ -224,19 +226,29 @@ impl SimpleAgentBuilder {
             .collect();
         Self {
             name: agent.name().into(),
-            description: agent.description().into(),
-            executor: SimpleExecutor::new(system_prompt, tools.clone()),
+            prompt: agent.prompt().into(),
+            executor: SimpleExecutor::new(agent.prompt().into(), tools.clone()),
             tools,
+            llm: None,
         }
     }
 
-    pub fn description(mut self, desc: impl Into<String>) -> Self {
-        self.description = desc.into();
+    pub fn with_llm(mut self, llm: Arc<dyn LLMProvider>) -> Self {
+        self.llm = Some(llm);
         self
     }
 
-    pub fn build(self) -> BaseAgent<SimpleExecutor> {
-        BaseAgent::new(self.name, self.description, self.executor, self.tools)
+    pub fn build(self) -> Result<BaseAgent<SimpleExecutor>, String> {
+        let llm = self
+            .llm
+            .ok_or_else(|| "LLMProvider must be set".to_string())?;
+        Ok(BaseAgent::new(
+            self.name,
+            self.prompt,
+            self.executor,
+            self.tools,
+            llm,
+        ))
     }
 }
 

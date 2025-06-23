@@ -3,12 +3,12 @@ use crate::agent::executor::AgentExecutor;
 use crate::agent::result::AgentRunResult;
 use crate::protocol::{AgentID, Event, SessionId, SubmissionId};
 use crate::session::{Session, SessionManager, Task};
-use autoagents_llm::LLMProvider;
 use serde_json::Value;
 use std::path::PathBuf;
 use std::sync::Arc;
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, Mutex};
 use tokio::task::JoinHandle;
+use tokio_stream::wrappers::ReceiverStream;
 use uuid::Uuid;
 
 #[derive(Debug, thiserror::Error)]
@@ -46,26 +46,19 @@ impl Default for EnvironmentConfig {
 
 pub struct Environment {
     config: EnvironmentConfig,
-    llm: Arc<dyn LLMProvider>,
-    tx_event: mpsc::Sender<Event>,
-    rx_event: Option<mpsc::Receiver<Event>>,
     session_manager: SessionManager,
     default_session: SessionId,
     event_handler: Option<JoinHandle<()>>,
 }
 
 impl Environment {
-    pub async fn new(llm: Arc<dyn LLMProvider>, config: Option<EnvironmentConfig>) -> Self {
+    pub async fn new(config: Option<EnvironmentConfig>) -> Self {
         let config = config.unwrap_or_default();
-        let (tx_event, rx_event) = mpsc::channel(config.channel_buffer);
-        let session_manager = SessionManager::new(tx_event.clone());
-        let (default_session_id, _) = session_manager.create_session().await;
+        let session_manager = SessionManager::new();
+        let (default_session_id, _) = session_manager.create_session(config.channel_buffer).await;
 
         Self {
             config,
-            llm,
-            tx_event,
-            rx_event: Some(rx_event),
             session_manager,
             default_session: default_session_id,
             event_handler: None,
@@ -76,9 +69,17 @@ impl Environment {
         &self.config
     }
 
-    pub async fn get_session(&self, session_id: Option<SessionId>) -> Option<Arc<Session>> {
+    pub async fn get_session(&self, session_id: Option<SessionId>) -> Option<Arc<Mutex<Session>>> {
         let sid = session_id.unwrap_or(self.default_session);
         self.session_manager.get_session(&sid).await
+    }
+
+    pub async fn get_session_mut(
+        &self,
+        session_id: Option<SessionId>,
+    ) -> Option<Arc<Mutex<Session>>> {
+        let sid = session_id.unwrap_or(self.default_session);
+        self.session_manager.get_session_mut(&sid).await
     }
 
     pub async fn register_agent<E>(
@@ -87,7 +88,7 @@ impl Environment {
         session_id: Option<SessionId>,
     ) -> AgentID
     where
-        E: AgentExecutor + Clone + Send + Sync + 'static,
+        E: AgentExecutor,
         E::Output: Into<Value> + Send,
         E::Error: std::error::Error + Send + Sync + 'static,
     {
@@ -103,11 +104,15 @@ impl Environment {
         agent: BaseAgent<E>,
         session_id: Option<SessionId>,
     ) where
-        E: AgentExecutor + Clone + Send + Sync + 'static,
+        E: AgentExecutor,
         E::Output: Into<Value> + Send,
         E::Error: std::error::Error + Send + Sync + 'static,
     {
-        let session = self.get_session(session_id).await.unwrap();
+        let session_arc = self
+            .get_session(session_id)
+            .await
+            .expect("Session not found");
+        let session = session_arc.lock().await;
         session.register_agent_with_id(agent_id, agent).await;
     }
 
@@ -118,7 +123,11 @@ impl Environment {
     ) -> Result<SubmissionId, EnvironmentError> {
         let task = Task::new(task, Some(agent_id));
         let sub_id = task.submission_id;
-        let session = self.get_session(Some(self.default_session)).await.unwrap();
+        let session_arc = self
+            .get_session(Some(self.default_session))
+            .await
+            .expect("Session not found");
+        let session = session_arc.lock().await;
         session.add_task(task).await;
         Ok(sub_id)
     }
@@ -129,14 +138,17 @@ impl Environment {
         sub_id: SubmissionId,
         session_id: Option<SessionId>,
     ) -> Result<AgentRunResult, EnvironmentError> {
-        let llm = self.llm.clone();
-        let session = self.get_session(session_id).await.unwrap();
+        let session_arc = self
+            .get_session(session_id)
+            .await
+            .expect("Session not found");
+        let session = session_arc.lock().await;
         let task = session.get_task(sub_id).await;
         if task.is_none() {
             return Err(EnvironmentError::NoTaskSet(sub_id));
         }
         session
-            .run_task(task.unwrap(), agent_id, llm)
+            .run_task(task.unwrap(), agent_id)
             .await
             .map_err(|e| EnvironmentError::RuntimeError(e.to_string()))
     }
@@ -146,10 +158,13 @@ impl Environment {
         agent_id: AgentID,
         session_id: Option<SessionId>,
     ) -> Result<AgentRunResult, EnvironmentError> {
-        let llm = self.llm.clone();
-        let session = self.get_session(session_id).await.unwrap();
+        let session_arc = self
+            .get_session(session_id)
+            .await
+            .expect("Session not found");
+        let session = session_arc.lock().await;
         session
-            .run(agent_id, llm)
+            .run(agent_id)
             .await
             .map_err(|e| EnvironmentError::RuntimeError(e.to_string()))
     }
@@ -159,20 +174,36 @@ impl Environment {
         agent_id: AgentID,
         session_id: Option<SessionId>,
     ) -> Result<Vec<AgentRunResult>, EnvironmentError> {
-        let llm = self.llm.clone();
-        let session = self.get_session(session_id).await.unwrap();
+        let session_arc = self
+            .get_session(session_id)
+            .await
+            .expect("Session not found");
+        let session = session_arc.lock().await;
         session
-            .run_all(agent_id, llm)
+            .run_all(agent_id)
             .await
             .map_err(|e| EnvironmentError::RuntimeError(e.to_string()))
     }
 
-    pub fn event_sender(&self) -> mpsc::Sender<Event> {
-        self.tx_event.clone()
+    pub async fn event_sender(&self, session_id: Option<SessionId>) -> mpsc::Sender<Event> {
+        let session_arc = self
+            .get_session(session_id)
+            .await
+            .expect("Session not found");
+        let session = session_arc.lock().await;
+        session.event_sender().clone()
     }
 
-    pub fn event_receiver(&mut self) -> Option<mpsc::Receiver<Event>> {
-        self.rx_event.take()
+    pub async fn take_event_receiver(
+        &mut self,
+        session_id: Option<SessionId>,
+    ) -> Option<ReceiverStream<Event>> {
+        if let Some(session_arc_mutex) = self.get_session_mut(session_id).await {
+            let mut session = session_arc_mutex.lock().await;
+            session.take_event_receiver()
+        } else {
+            None
+        }
     }
 
     pub async fn shutdown(&mut self) {

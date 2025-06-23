@@ -4,12 +4,12 @@ use crate::agent::result::AgentRunResult;
 use crate::agent::runnable::{RunnableAgent, RunnableAgentBuilder};
 use crate::error::SessionError;
 use crate::protocol::{AgentID, Event, SessionId, SubmissionId};
-use autoagents_llm::LLMProvider;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::{mpsc, Mutex, RwLock};
+use tokio_stream::wrappers::ReceiverStream;
 use uuid::Uuid;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -42,18 +42,21 @@ struct State {
 pub struct Session {
     pub id: SessionId,
     tx_event: mpsc::Sender<Event>,
+    rx_event: Option<mpsc::Receiver<Event>>,
     state: Arc<Mutex<State>>,
     agents: Arc<RwLock<HashMap<AgentID, Arc<dyn RunnableAgent + Send + Sync + 'static>>>>,
 }
 
 impl Session {
-    pub fn new(tx_event: mpsc::Sender<Event>) -> (SessionId, Self) {
+    pub fn new(channel_buffer: usize) -> (SessionId, Self) {
         let id = Uuid::new_v4();
+        let (tx_event, rx_event) = mpsc::channel(channel_buffer);
         (
             id,
             Self {
                 id,
                 tx_event,
+                rx_event: Some(rx_event),
                 state: Arc::new(Mutex::new(State::default())),
                 agents: Arc::new(RwLock::new(HashMap::new())),
             },
@@ -113,9 +116,17 @@ impl Session {
             .cloned()
     }
 
+    pub fn event_sender(&self) -> mpsc::Sender<Event> {
+        self.tx_event.clone()
+    }
+
+    pub fn take_event_receiver(&mut self) -> Option<ReceiverStream<Event>> {
+        self.rx_event.take().map(ReceiverStream::new)
+    }
+
     pub async fn register_agent_with_id<E>(&self, agent_id: Uuid, agent: BaseAgent<E>)
     where
-        E: AgentExecutor + Clone + Send + Sync + 'static,
+        E: AgentExecutor,
         E::Output: Into<Value> + Send,
         E::Error: std::error::Error + Send + Sync + 'static,
     {
@@ -128,7 +139,6 @@ impl Session {
         &self,
         task: Task,
         agent_id: AgentID,
-        llm: Arc<dyn LLMProvider>,
     ) -> Result<AgentRunResult, SessionError> {
         let agent = self
             .agents
@@ -138,32 +148,24 @@ impl Session {
             .ok_or(SessionError::AgentNotFound(agent_id))?
             .clone();
         agent
-            .spawn_task(task, llm, self.tx_event.clone())
+            .spawn_task(task, self.tx_event.clone())
             .await
             .unwrap()
             .map_err(|e| SessionError::TaskExecutionFailed(e.to_string()))
     }
 
-    pub async fn run(
-        &self,
-        agent_id: Uuid,
-        llm: Arc<dyn LLMProvider>,
-    ) -> Result<AgentRunResult, SessionError> {
+    pub async fn run(&self, agent_id: Uuid) -> Result<AgentRunResult, SessionError> {
         if let Some(task) = self.get_top_task().await {
-            self.run_task(task, agent_id, llm).await
+            self.run_task(task, agent_id).await
         } else {
             Err(SessionError::NoTaskSet(agent_id))
         }
     }
 
-    pub async fn run_all(
-        &self,
-        agent_id: Uuid,
-        llm: Arc<dyn LLMProvider>,
-    ) -> Result<Vec<AgentRunResult>, SessionError> {
+    pub async fn run_all(&self, agent_id: Uuid) -> Result<Vec<AgentRunResult>, SessionError> {
         let mut results = Vec::new();
         while !self.is_task_queue_empty().await {
-            let result = self.run(agent_id, llm.clone()).await?;
+            let result = self.run(agent_id).await?;
             results.push(result);
         }
         Ok(results)
@@ -171,27 +173,31 @@ impl Session {
 }
 
 pub struct SessionManager {
-    sessions: RwLock<HashMap<SessionId, Arc<Session>>>,
-    tx_event: mpsc::Sender<Event>,
+    sessions: RwLock<HashMap<SessionId, Arc<Mutex<Session>>>>,
 }
 
 impl SessionManager {
-    pub fn new(tx_event: mpsc::Sender<Event>) -> Self {
+    pub fn new() -> Self {
         Self {
             sessions: RwLock::new(HashMap::new()),
-            tx_event,
         }
     }
 
-    pub async fn create_session(&self) -> (SessionId, Arc<Session>) {
-        let (id, session) = Session::new(self.tx_event.clone());
-        let session_arc = Arc::new(session);
+    pub async fn create_session(&self, channel_buffer: usize) -> (SessionId, Arc<Mutex<Session>>) {
+        let (id, session) = Session::new(channel_buffer);
+        let session_arc = Arc::new(Mutex::new(session));
         let mut sessions = self.sessions.write().await;
         sessions.insert(id, session_arc.clone());
         (id, session_arc)
     }
 
-    pub async fn get_session(&self, session_id: &SessionId) -> Option<Arc<Session>> {
+    pub async fn get_session(&self, session_id: &SessionId) -> Option<Arc<Mutex<Session>>> {
+        let sessions = self.sessions.read().await;
+        sessions.get(session_id).cloned()
+    }
+
+    pub async fn get_session_mut(&self, session_id: &SessionId) -> Option<Arc<Mutex<Session>>> {
+        // This can be same as get_session, since the interior mutability is in Mutex
         let sessions = self.sessions.read().await;
         sessions.get(session_id).cloned()
     }

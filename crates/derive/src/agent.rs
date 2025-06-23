@@ -8,7 +8,7 @@ use syn::{
 
 pub(crate) struct AgentAttributes {
     pub(crate) name: LitStr,
-    pub(crate) description: LitStr,
+    pub(crate) prompt: LitStr,
     pub(crate) tools: Option<Vec<Ident>>,
 }
 
@@ -16,8 +16,8 @@ pub(crate) struct AgentAttributes {
 pub(crate) enum AgentAttributeKeys {
     #[strum(serialize = "name")]
     Name,
-    #[strum(serialize = "description")]
-    Description,
+    #[strum(serialize = "prompt")]
+    Prompt,
     #[strum(serialize = "tools")]
     Tools,
     Unknown(String),
@@ -27,7 +27,7 @@ impl From<Ident> for AgentAttributeKeys {
     fn from(value: Ident) -> Self {
         match value.to_string().as_str() {
             "name" => Self::Name,
-            "description" => Self::Description,
+            "prompt" => Self::Prompt,
             "tools" => Self::Tools,
             other => Self::Unknown(other.to_string()),
         }
@@ -37,7 +37,7 @@ impl From<Ident> for AgentAttributeKeys {
 impl Parse for AgentAttributes {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
         let mut name = None;
-        let mut description = None;
+        let mut prompt = None;
         let mut tools = None;
         while !input.is_empty() {
             let key: Ident = input.parse()?;
@@ -50,8 +50,8 @@ impl Parse for AgentAttributes {
                 AgentAttributeKeys::Name => {
                     name = Some(input.parse::<LitStr>()?);
                 }
-                AgentAttributeKeys::Description => {
-                    description = Some(input.parse::<LitStr>()?);
+                AgentAttributeKeys::Prompt => {
+                    prompt = Some(input.parse::<LitStr>()?);
                 }
                 AgentAttributeKeys::Tools => {
                     // Parse a bracketed list of identifiers
@@ -79,10 +79,10 @@ impl Parse for AgentAttributes {
                     format!("Missing attribute: {}", AgentAttributeKeys::Name),
                 )
             })?,
-            description: description.ok_or_else(|| {
+            prompt: prompt.ok_or_else(|| {
                 syn::Error::new(
                     input.span(),
-                    format!("Missing attribute: {}", AgentAttributeKeys::Description),
+                    format!("Missing attribute: {}", AgentAttributeKeys::Prompt),
                 )
             })?,
             tools,
@@ -99,7 +99,7 @@ impl AgentParser {
         let input_struct = parse_macro_input!(item as ItemStruct);
         let struct_name = &input_struct.ident;
         let agent_name_literal = agent_attrs.name;
-        let agent_description = agent_attrs.description;
+        let agent_prompt = agent_attrs.prompt;
         let tool_idents = agent_attrs.tools.unwrap_or_default();
 
         let expanded = quote! {
@@ -110,8 +110,8 @@ impl AgentParser {
                     #agent_name_literal
                 }
 
-                fn description(&self) -> &'static str {
-                    #agent_description
+                fn prompt(&self) -> &'static str {
+                    #agent_prompt
                 }
 
                 fn tools(&self) -> Vec<Box<dyn ToolT>> {

@@ -7,7 +7,7 @@ use autoagents_derive::{agent, tool, ToolInput};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::sync::Arc;
-use tokio::sync::mpsc::Receiver;
+use tokio_stream::{wrappers::ReceiverStream, StreamExt};
 
 #[derive(Serialize, Deserialize, ToolInput, Debug)]
 pub struct WeatherArgs {}
@@ -25,14 +25,14 @@ fn get_weather(args: WeatherArgs) -> String {
 
 #[agent(
     name = "general_agent",
-    description = "You are general assistant and will answer user quesries in crips manner.",
+    prompt = "You are general assistant and will answer user quesries in crips manner.",
     tools = [WeatherTool]
 )]
 pub struct WeatherAgent {}
 
-fn handle_events(mut event_receiver: Receiver<Event>) {
+fn handle_events(mut event_stream: ReceiverStream<Event>) {
     tokio::spawn(async move {
-        while let Some(event) = event_receiver.recv().await {
+        while let Some(event) = event_stream.next().await {
             println!("Event: {:?}", event);
         }
     });
@@ -40,14 +40,13 @@ fn handle_events(mut event_receiver: Receiver<Event>) {
 
 pub async fn simple_agent(llm: Arc<dyn LLMProvider>) {
     // Build a Simple agent
-    let agent = SimpleAgentBuilder::from_agent(
-        WeatherAgent {},
-        "You are general assistant and will answer user quesries in crisp manner.".into(),
-    )
-    .build();
+    let agent = SimpleAgentBuilder::from_agent(WeatherAgent {})
+        .with_llm(llm)
+        .build()
+        .unwrap();
 
-    let mut environment = Environment::new(llm, None).await;
-    let receiver = environment.event_receiver().unwrap();
+    let mut environment = Environment::new(None).await;
+    let receiver = environment.take_event_receiver(None).await.unwrap();
     handle_events(receiver);
 
     let agent_id = environment.register_agent(agent, None).await;

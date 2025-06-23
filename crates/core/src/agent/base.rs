@@ -1,29 +1,32 @@
 use super::executor::AgentExecutor;
 use async_trait::async_trait;
-use autoagents_llm::ToolT;
+use autoagents_llm::{LLMProvider, ToolT};
 use std::sync::Arc;
 
 /// Base agent type that uses an executor strategy
 #[derive(Clone)]
-pub struct BaseAgent<E: AgentExecutor + Send + Sync> {
+pub struct BaseAgent<E: AgentExecutor> {
     pub name: String,
-    pub description: String,
+    pub prompt: String,
     pub executor: E,
     pub tools: Vec<Arc<Box<dyn ToolT>>>,
+    pub(crate) llm: Arc<dyn LLMProvider>,
 }
 
 impl<E: AgentExecutor> BaseAgent<E> {
     pub fn new(
         name: String,
-        description: String,
+        prompt: String,
         executor: E,
         tools: Vec<Arc<Box<dyn ToolT>>>,
+        llm: Arc<dyn LLMProvider>,
     ) -> Self {
         Self {
             name,
-            description,
+            prompt,
             executor,
             tools,
+            llm,
         }
     }
 
@@ -42,7 +45,7 @@ impl<E: AgentExecutor> BaseAgent<E> {
 
 #[async_trait]
 pub trait AgentDeriveT: Send + Sync {
-    fn description(&self) -> &'static str;
+    fn prompt(&self) -> &'static str;
     fn name(&self) -> &'static str;
     fn tools(&self) -> Vec<Box<dyn ToolT>>;
 }
