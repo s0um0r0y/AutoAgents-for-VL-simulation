@@ -47,55 +47,51 @@ fn get_weather(args: WeatherArgs) -> String {
 
 #[agent(
     name = "general_agent",
-    description = "You are general assistant and will answer user quesries in crips manner.",
+    prompt = "You are general assistant and will answer user quesries in crips manner.",
     tools = [WeatherTool]
 )]
-pub struct MathAgent {}
+pub struct WeatherAgent {}
 
-fn handle_events(mut event_receiver: Receiver<Event>) {
-    tokio::spawn(async move {
-        while let Some(event) = event_receiver.recv().await {
-            println!("Event: {:?}", event);
-        }
-    });
+fn handle_events(event_stream: Option<ReceiverStream<Event>>) {
+    if let Some(mut event_stream) = event_stream {
+        tokio::spawn(async move {
+            while let Some(event) = event_stream.next().await {
+                println!("Event: {:?}", event);
+            }
+        });
+    }
 }
 
-pub async fn simple_agent(llm: impl LLM + Clone + 'static) {
+pub async fn simple_agent(llm: Arc<dyn LLMProvider>) -> Result<(), Error> {
     // Build a Simple agent
-    let agent = SimpleAgentBuilder::from_agent(
-        MathAgent {},
-        "You are general assistant and will answer user quesries in crips manner.".into(),
-    )
-    .build();
-
-    let mut environment = Environment::new(llm, None);
-    let receiver = environment.event_receiver().unwrap();
+    let agent = SimpleAgentBuilder::from_agent(WeatherAgent {})
+        .with_llm(llm)
+        .build()
+        .unwrap();
+    let mut environment = Environment::new(None).await;
+    let receiver = environment.take_event_receiver(None).await;
     handle_events(receiver);
 
-    let agent_id = environment.register_agent(agent, None);
-
+    let agent_id = environment.register_agent(agent, None).await?;
     let _ = environment
         .add_task(agent_id, "What is the current weather??")
-        .await
-        .unwrap();
+        .await?;
     let _ = environment
         .add_task(
             agent_id,
             "What is the weather you just said? reply back in beautiful format.",
         )
-        .await
-        .unwrap();
-    let result = environment.run_all(agent_id, None).await.unwrap();
+        .await?;
+
+    let result = environment.run_all(agent_id, None).await?;
     println!("Result {:?}", result);
     let _ = environment.shutdown().await;
+    Ok(())
 }
 ```
 
 ## TODO
-- [ ] [FEATURE] Refactor LLM Crate to be similar to LiteLLM
 - [ ] [FEATURE] Add Cost Tracking in LLM Crate
-- [ ] [REFACTOR] Seperate out embeddings into embeddings provider
-- [ ] [REFACTOR] Unified interface for LLMProvider
 - [ ] [REFACTOR] Proper implemetation of streaming and HTTP requests
 - [ ] [FEATURE] Add ReAct Agent type
 - [ ] [REFACTOR] Refactor the Provider implementation where, Provider needs to do as little implemetation as possible,
