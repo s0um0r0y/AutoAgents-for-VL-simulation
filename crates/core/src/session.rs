@@ -2,15 +2,32 @@ use crate::agent::base::BaseAgent;
 use crate::agent::executor::AgentExecutor;
 use crate::agent::result::AgentRunResult;
 use crate::agent::runnable::{RunnableAgent, RunnableAgentBuilder};
-use crate::error::SessionError;
+use crate::error::Error;
 use crate::protocol::{AgentID, Event, SessionId, SubmissionId};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::{mpsc, Mutex, RwLock};
+use tokio::task::JoinError;
 use tokio_stream::wrappers::ReceiverStream;
 use uuid::Uuid;
+
+/// Error types for Session operations
+#[derive(Debug, thiserror::Error)]
+pub enum SessionError {
+    #[error("Agent not found: {0}")]
+    AgentNotFound(Uuid),
+
+    #[error("No task set for agent: {0}")]
+    NoTaskSet(Uuid),
+
+    #[error("Task is None")]
+    EmptyTask,
+
+    #[error("Task join error: {0}")]
+    TaskJoinError(#[from] JoinError),
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Task {
@@ -137,9 +154,10 @@ impl Session {
 
     pub async fn run_task(
         &self,
-        task: Task,
+        task: Option<Task>,
         agent_id: AgentID,
-    ) -> Result<AgentRunResult, SessionError> {
+    ) -> Result<AgentRunResult, Error> {
+        let task = task.ok_or_else(|| SessionError::EmptyTask)?;
         let agent = self
             .agents
             .read()
@@ -147,22 +165,23 @@ impl Session {
             .get(&agent_id)
             .ok_or(SessionError::AgentNotFound(agent_id))?
             .clone();
-        agent
-            .spawn_task(task, self.tx_event.clone())
-            .await
-            .unwrap()
-            .map_err(|e| SessionError::TaskExecutionFailed(e.to_string()))
+
+        let join_handle = agent.spawn_task(task, self.tx_event.clone());
+
+        // Await the task completion:
+        let result: Result<AgentRunResult, Error> = match join_handle.await {
+            Ok(run_result) => run_result,
+            Err(join_err) => Err(SessionError::from(join_err).into()),
+        };
+        result
     }
 
-    pub async fn run(&self, agent_id: Uuid) -> Result<AgentRunResult, SessionError> {
-        if let Some(task) = self.get_top_task().await {
-            self.run_task(task, agent_id).await
-        } else {
-            Err(SessionError::NoTaskSet(agent_id))
-        }
+    pub async fn run(&self, agent_id: Uuid) -> Result<AgentRunResult, Error> {
+        let task = self.get_top_task().await;
+        self.run_task(task, agent_id).await
     }
 
-    pub async fn run_all(&self, agent_id: Uuid) -> Result<Vec<AgentRunResult>, SessionError> {
+    pub async fn run_all(&self, agent_id: Uuid) -> Result<Vec<AgentRunResult>, Error> {
         let mut results = Vec::new();
         while !self.is_task_queue_empty().await {
             let result = self.run(agent_id).await?;
@@ -172,15 +191,14 @@ impl Session {
     }
 }
 
+#[derive(Default)]
 pub struct SessionManager {
     sessions: RwLock<HashMap<SessionId, Arc<Mutex<Session>>>>,
 }
 
 impl SessionManager {
     pub fn new() -> Self {
-        Self {
-            sessions: RwLock::new(HashMap::new()),
-        }
+        Self::default()
     }
 
     pub async fn create_session(&self, channel_buffer: usize) -> (SessionId, Arc<Mutex<Session>>) {

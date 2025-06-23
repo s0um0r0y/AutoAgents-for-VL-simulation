@@ -168,9 +168,8 @@ pub struct LLMBuilder<L: LLMProvider> {
     pub(crate) openai_web_search_user_location_approximate_region: Option<String>,
 }
 
-impl<L: LLMProvider> LLMBuilder<L> {
-    /// Creates a new empty builder instance with default values.
-    pub fn new() -> Self {
+impl<L: LLMProvider> Default for LLMBuilder<L> {
+    fn default() -> Self {
         Self {
             backend: PhantomData,
             api_key: None,
@@ -210,6 +209,13 @@ impl<L: LLMProvider> LLMBuilder<L> {
             openai_web_search_user_location_approximate_city: None,
             openai_web_search_user_location_approximate_region: None,
         }
+    }
+}
+
+impl<L: LLMProvider> LLMBuilder<L> {
+    /// Creates a new empty builder instance with default values.
+    pub fn new() -> Self {
+        Self::default()
     }
 
     /// Sets the API key for authentication.

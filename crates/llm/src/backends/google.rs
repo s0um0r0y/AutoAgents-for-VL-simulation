@@ -1020,9 +1020,7 @@ fn parse_google_sse_chunk(chunk: &str) -> Result<Option<String>, LLMError> {
     for line in chunk.lines() {
         let line = line.trim();
 
-        if line.starts_with("data: ") {
-            let data = &line[6..];
-
+        if let Some(data) = line.strip_prefix("data: ") {
             match serde_json::from_str::<GoogleStreamResponse>(data) {
                 Ok(response) => {
                     if let Some(candidates) = response.candidates {

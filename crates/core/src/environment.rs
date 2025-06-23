@@ -1,6 +1,7 @@
 use crate::agent::base::BaseAgent;
 use crate::agent::executor::AgentExecutor;
 use crate::agent::result::AgentRunResult;
+use crate::error::Error;
 use crate::protocol::{AgentID, Event, SessionId, SubmissionId};
 use crate::session::{Session, SessionManager, Task};
 use serde_json::Value;
@@ -13,20 +14,8 @@ use uuid::Uuid;
 
 #[derive(Debug, thiserror::Error)]
 pub enum EnvironmentError {
-    #[error("Agent not found: {0}")]
-    AgentNotFound(Uuid),
-
-    #[error("Task execution failed: {0}")]
-    TaskExecutionFailed(String),
-
-    #[error("Channel error: {0}")]
-    ChannelError(String),
-
-    #[error("Runtime error: {0}")]
-    RuntimeError(String),
-
-    #[error("No task set for agent: {0}")]
-    NoTaskSet(Uuid),
+    #[error("Session not found: {0}")]
+    SessionNotFound(SessionId),
 }
 
 #[derive(Clone)]
@@ -74,6 +63,16 @@ impl Environment {
         self.session_manager.get_session(&sid).await
     }
 
+    pub async fn get_session_or_default(
+        &self,
+        session_id: Option<SessionId>,
+    ) -> Result<Arc<Mutex<Session>>, Error> {
+        let sid = session_id.unwrap_or(self.default_session);
+        self.get_session(Some(sid))
+            .await
+            .ok_or_else(|| EnvironmentError::SessionNotFound(sid).into())
+    }
+
     pub async fn get_session_mut(
         &self,
         session_id: Option<SessionId>,
@@ -86,7 +85,7 @@ impl Environment {
         &self,
         agent: BaseAgent<E>,
         session_id: Option<SessionId>,
-    ) -> AgentID
+    ) -> Result<AgentID, Error>
     where
         E: AgentExecutor,
         E::Output: Into<Value> + Send,
@@ -94,8 +93,8 @@ impl Environment {
     {
         let agent_id = Uuid::new_v4();
         self.register_agent_with_id(agent_id, agent, session_id)
-            .await;
-        agent_id
+            .await?;
+        Ok(agent_id)
     }
 
     pub async fn register_agent_with_id<E>(
@@ -103,30 +102,26 @@ impl Environment {
         agent_id: AgentID,
         agent: BaseAgent<E>,
         session_id: Option<SessionId>,
-    ) where
+    ) -> Result<(), Error>
+    where
         E: AgentExecutor,
         E::Output: Into<Value> + Send,
         E::Error: std::error::Error + Send + Sync + 'static,
     {
-        let session_arc = self
-            .get_session(session_id)
-            .await
-            .expect("Session not found");
+        let session_arc = self.get_session_or_default(session_id).await?;
         let session = session_arc.lock().await;
         session.register_agent_with_id(agent_id, agent).await;
+        Ok(())
     }
 
     pub async fn add_task<T: Into<String>>(
         &self,
         agent_id: Uuid,
         task: T,
-    ) -> Result<SubmissionId, EnvironmentError> {
+    ) -> Result<SubmissionId, Error> {
         let task = Task::new(task, Some(agent_id));
         let sub_id = task.submission_id;
-        let session_arc = self
-            .get_session(Some(self.default_session))
-            .await
-            .expect("Session not found");
+        let session_arc = self.get_session_or_default(None).await?;
         let session = session_arc.lock().await;
         session.add_task(task).await;
         Ok(sub_id)
@@ -137,61 +132,40 @@ impl Environment {
         agent_id: AgentID,
         sub_id: SubmissionId,
         session_id: Option<SessionId>,
-    ) -> Result<AgentRunResult, EnvironmentError> {
-        let session_arc = self
-            .get_session(session_id)
-            .await
-            .expect("Session not found");
+    ) -> Result<AgentRunResult, Error> {
+        let session_arc = self.get_session_or_default(session_id).await?;
         let session = session_arc.lock().await;
         let task = session.get_task(sub_id).await;
-        if task.is_none() {
-            return Err(EnvironmentError::NoTaskSet(sub_id));
-        }
-        session
-            .run_task(task.unwrap(), agent_id)
-            .await
-            .map_err(|e| EnvironmentError::RuntimeError(e.to_string()))
+        session.run_task(task, agent_id).await
     }
 
     pub async fn run(
         &self,
         agent_id: AgentID,
         session_id: Option<SessionId>,
-    ) -> Result<AgentRunResult, EnvironmentError> {
-        let session_arc = self
-            .get_session(session_id)
-            .await
-            .expect("Session not found");
+    ) -> Result<AgentRunResult, Error> {
+        let session_arc = self.get_session_or_default(session_id).await?;
         let session = session_arc.lock().await;
-        session
-            .run(agent_id)
-            .await
-            .map_err(|e| EnvironmentError::RuntimeError(e.to_string()))
+        session.run(agent_id).await
     }
 
     pub async fn run_all(
         &self,
         agent_id: AgentID,
         session_id: Option<SessionId>,
-    ) -> Result<Vec<AgentRunResult>, EnvironmentError> {
-        let session_arc = self
-            .get_session(session_id)
-            .await
-            .expect("Session not found");
+    ) -> Result<Vec<AgentRunResult>, Error> {
+        let session_arc = self.get_session_or_default(session_id).await?;
         let session = session_arc.lock().await;
-        session
-            .run_all(agent_id)
-            .await
-            .map_err(|e| EnvironmentError::RuntimeError(e.to_string()))
+        session.run_all(agent_id).await
     }
 
-    pub async fn event_sender(&self, session_id: Option<SessionId>) -> mpsc::Sender<Event> {
-        let session_arc = self
-            .get_session(session_id)
-            .await
-            .expect("Session not found");
+    pub async fn event_sender(
+        &self,
+        session_id: Option<SessionId>,
+    ) -> Result<mpsc::Sender<Event>, Error> {
+        let session_arc = self.get_session_or_default(session_id).await?;
         let session = session_arc.lock().await;
-        session.event_sender().clone()
+        Ok(session.event_sender().clone())
     }
 
     pub async fn take_event_receiver(

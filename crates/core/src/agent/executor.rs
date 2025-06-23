@@ -1,3 +1,4 @@
+use super::runnable::AgentState;
 use crate::session::Task;
 use async_trait::async_trait;
 use autoagents_llm::chat::ChatMessage;
@@ -8,8 +9,6 @@ use std::error::Error;
 use std::fmt::Debug;
 use std::sync::Arc;
 use tokio::sync::Mutex;
-
-use super::runnable::AgentState;
 
 /// Result of processing a single turn
 #[derive(Debug)]

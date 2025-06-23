@@ -1,7 +1,7 @@
 use clap::{Parser, ValueEnum};
 mod chat;
 mod simple;
-use autoagents::{llm::backends::openai::OpenAI, llm::builder::LLMBuilder};
+use autoagents::{core::error::Error, llm::backends::openai::OpenAI, llm::builder::LLMBuilder};
 
 #[derive(Debug, Clone, ValueEnum)]
 enum UseCase {
@@ -17,7 +17,7 @@ struct Args {
 }
 
 #[tokio::main]
-async fn main() {
+async fn main() -> Result<(), Error> {
     let args = Args::parse();
     // Check if API key is set
     let api_key = std::env::var("OPENAI_API_KEY").unwrap_or("".into());
@@ -33,6 +33,8 @@ async fn main() {
         .expect("Failed to build LLM");
 
     match args.usecase {
-        UseCase::Simple => simple::simple_agent(llm).await,
+        UseCase::Simple => simple::simple_agent(llm).await?,
     }
+
+    Ok(())
 }

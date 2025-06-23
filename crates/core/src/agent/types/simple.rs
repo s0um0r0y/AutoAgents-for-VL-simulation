@@ -149,23 +149,21 @@ impl AgentExecutor for SimpleExecutor {
         state: Arc<Mutex<AgentState>>,
     ) -> Result<TurnResult<Self::Output>, Self::Error> {
         let has_tools = !self.tools.is_empty();
-        let response;
-        if has_tools {
+        let response = if has_tools {
             let tools = self.tools.iter().map(Tool::from).collect::<Vec<_>>();
-            response = llm
-                .chat_with_tools(messages.as_slice(), Some(tools.as_slice()))
-                .await;
+            llm.chat_with_tools(messages.as_slice(), Some(tools.as_slice()))
+                .await
         } else {
             // Call the LLM
-            response = llm.chat(messages.as_slice()).await;
-        }
+            llm.chat(messages.as_slice()).await
+        };
+
         let response_mapped = response.map_err(|e| SimpleError::LLMError(e.to_string()))?;
 
         // Check if the response contains tool calls
-        let final_response;
-        if response_mapped.tool_calls().is_none() {
+        let final_response = if response_mapped.tool_calls().is_none() {
             // No tool calls, this is the final response
-            final_response = response_mapped.text().clone().unwrap();
+            response_mapped.text().clone().unwrap()
         } else {
             let tool_calls = response_mapped.tool_calls().unwrap();
             let result = self.process_tool_calls(tool_calls).await.unwrap();
@@ -178,7 +176,7 @@ impl AgentExecutor for SimpleExecutor {
             state.lock().await.record_tool_call(result.unwrap());
             // Continue the conversation after tool calls
             return Ok(TurnResult::Continue);
-        }
+        };
         // Record the final message
         state.lock().await.record_conversation(ChatMessage {
             role: ChatRole::Assistant,
@@ -238,10 +236,10 @@ impl SimpleAgentBuilder {
         self
     }
 
-    pub fn build(self) -> Result<BaseAgent<SimpleExecutor>, String> {
+    pub fn build(self) -> Result<BaseAgent<SimpleExecutor>, SimpleError> {
         let llm = self
             .llm
-            .ok_or_else(|| "LLMProvider must be set".to_string())?;
+            .ok_or_else(|| SimpleError::LLMError("LLm is not set".into()))?;
         Ok(BaseAgent::new(
             self.name,
             self.prompt,

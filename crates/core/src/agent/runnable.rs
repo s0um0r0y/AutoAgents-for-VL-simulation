@@ -1,6 +1,7 @@
 use super::base::BaseAgent;
 use super::executor::AgentExecutor;
 use super::result::AgentRunResult;
+use crate::error::Error;
 use crate::protocol::Event;
 use crate::session::Task;
 use crate::tool::ToolCallResult;
@@ -49,14 +50,13 @@ pub trait RunnableAgent: Send + Sync + 'static {
         self: Arc<Self>,
         task: Task,
         tx_event: mpsc::Sender<Event>,
-    ) -> Result<AgentRunResult, Box<dyn std::error::Error + Send + Sync + 'static>>;
+    ) -> Result<AgentRunResult, Error>;
 
     fn spawn_task(
         self: Arc<Self>,
         task: Task,
         tx_event: mpsc::Sender<Event>,
-    ) -> JoinHandle<Result<AgentRunResult, Box<dyn std::error::Error + Send + Sync + 'static>>>
-    {
+    ) -> JoinHandle<Result<AgentRunResult, Error>> {
         tokio::spawn(async move { self.run(task, tx_event).await })
     }
 }
@@ -107,7 +107,7 @@ where
         self: Arc<Self>,
         task: Task,
         tx_event: mpsc::Sender<Event>,
-    ) -> Result<AgentRunResult, Box<dyn std::error::Error + Send + Sync + 'static>> {
+    ) -> Result<AgentRunResult, Error> {
         let llm = self.agent.llm.clone();
         let result = self
             .agent

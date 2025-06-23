@@ -1,6 +1,7 @@
 use autoagents::core::agent::base::AgentDeriveT;
 use autoagents::core::agent::types::SimpleAgentBuilder;
 use autoagents::core::environment::Environment;
+use autoagents::core::error::Error;
 use autoagents::core::protocol::Event;
 use autoagents::llm::{LLMProvider, ToolInputT, ToolT};
 use autoagents_derive::{agent, tool, ToolInput};
@@ -30,39 +31,39 @@ fn get_weather(args: WeatherArgs) -> String {
 )]
 pub struct WeatherAgent {}
 
-fn handle_events(mut event_stream: ReceiverStream<Event>) {
-    tokio::spawn(async move {
-        while let Some(event) = event_stream.next().await {
-            println!("Event: {:?}", event);
-        }
-    });
+fn handle_events(event_stream: Option<ReceiverStream<Event>>) {
+    if let Some(mut event_stream) = event_stream {
+        tokio::spawn(async move {
+            while let Some(event) = event_stream.next().await {
+                println!("Event: {:?}", event);
+            }
+        });
+    }
 }
 
-pub async fn simple_agent(llm: Arc<dyn LLMProvider>) {
+pub async fn simple_agent(llm: Arc<dyn LLMProvider>) -> Result<(), Error> {
     // Build a Simple agent
     let agent = SimpleAgentBuilder::from_agent(WeatherAgent {})
         .with_llm(llm)
         .build()
         .unwrap();
-
     let mut environment = Environment::new(None).await;
-    let receiver = environment.take_event_receiver(None).await.unwrap();
+    let receiver = environment.take_event_receiver(None).await;
     handle_events(receiver);
 
-    let agent_id = environment.register_agent(agent, None).await;
-
+    let agent_id = environment.register_agent(agent, None).await?;
     let _ = environment
         .add_task(agent_id, "What is the current weather??")
-        .await
-        .unwrap();
+        .await?;
     let _ = environment
         .add_task(
             agent_id,
             "What is the weather you just said? reply back in beautiful format.",
         )
-        .await
-        .unwrap();
-    let result = environment.run_all(agent_id, None).await.unwrap();
+        .await?;
+
+    let result = environment.run_all(agent_id, None).await?;
     println!("Result {:?}", result);
     let _ = environment.shutdown().await;
+    Ok(())
 }
