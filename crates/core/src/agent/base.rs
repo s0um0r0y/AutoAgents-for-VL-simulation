@@ -1,13 +1,14 @@
 use super::executor::AgentExecutor;
 use async_trait::async_trait;
 use autoagents_llm::{LLMProvider, ToolT};
+use serde::Serialize;
 use std::sync::Arc;
 
 /// Base agent type that uses an executor strategy
 #[derive(Clone)]
 pub struct BaseAgent<E: AgentExecutor> {
     pub name: String,
-    pub prompt: String,
+    pub description: String,
     pub executor: E,
     pub tools: Vec<Arc<Box<dyn ToolT>>>,
     pub(crate) llm: Arc<dyn LLMProvider>,
@@ -16,14 +17,14 @@ pub struct BaseAgent<E: AgentExecutor> {
 impl<E: AgentExecutor> BaseAgent<E> {
     pub fn new(
         name: String,
-        prompt: String,
+        description: String,
         executor: E,
         tools: Vec<Arc<Box<dyn ToolT>>>,
         llm: Arc<dyn LLMProvider>,
     ) -> Self {
         Self {
             name,
-            prompt,
+            description,
             executor,
             tools,
             llm,
@@ -45,7 +46,8 @@ impl<E: AgentExecutor> BaseAgent<E> {
 
 #[async_trait]
 pub trait AgentDeriveT: Send + Sync {
-    fn prompt(&self) -> &'static str;
+    type Output: Serialize + Send + Sync;
+    fn description(&self) -> &'static str;
     fn name(&self) -> &'static str;
     fn tools(&self) -> Vec<Box<dyn ToolT>>;
 }

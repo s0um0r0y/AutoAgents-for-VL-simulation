@@ -91,6 +91,9 @@ pub async fn simple_agent(llm: Arc<dyn LLMProvider>) -> Result<(), Error> {
 ```
 
 ## TODO
+- [ ] Fix Protocol
+- [ ] Fix streaming
+- [ ] Add Memory to agent
 - [ ] [FEATURE] Add Cost Tracking in LLM Crate
 - [ ] [REFACTOR] Proper implemetation of streaming and HTTP requests
 - [ ] [FEATURE] Add ReAct Agent type

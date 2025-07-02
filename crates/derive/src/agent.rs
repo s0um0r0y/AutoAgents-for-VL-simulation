@@ -3,23 +3,26 @@ use quote::quote;
 use strum::{Display, EnumString};
 use syn::{
     bracketed, parse::Parse, parse_macro_input, punctuated::Punctuated, Ident, ItemStruct, LitStr,
-    Token,
+    Token, Type,
 };
 
 pub(crate) struct AgentAttributes {
     pub(crate) name: LitStr,
-    pub(crate) prompt: LitStr,
+    pub(crate) description: LitStr,
     pub(crate) tools: Option<Vec<Ident>>,
+    pub(crate) output: Type,
 }
 
 #[derive(EnumString, Display)]
 pub(crate) enum AgentAttributeKeys {
     #[strum(serialize = "name")]
     Name,
-    #[strum(serialize = "prompt")]
-    Prompt,
+    #[strum(serialize = "description")]
+    Description,
     #[strum(serialize = "tools")]
     Tools,
+    #[strum(serialize = "output")]
+    Output,
     Unknown(String),
 }
 
@@ -27,8 +30,9 @@ impl From<Ident> for AgentAttributeKeys {
     fn from(value: Ident) -> Self {
         match value.to_string().as_str() {
             "name" => Self::Name,
-            "prompt" => Self::Prompt,
+            "description" => Self::Description,
             "tools" => Self::Tools,
+            "output" => Self::Output,
             other => Self::Unknown(other.to_string()),
         }
     }
@@ -37,8 +41,9 @@ impl From<Ident> for AgentAttributeKeys {
 impl Parse for AgentAttributes {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
         let mut name = None;
-        let mut prompt = None;
+        let mut description = None;
         let mut tools = None;
+        let mut output = None;
         while !input.is_empty() {
             let key: Ident = input.parse()?;
             let key_span = key.span();
@@ -50,8 +55,11 @@ impl Parse for AgentAttributes {
                 AgentAttributeKeys::Name => {
                     name = Some(input.parse::<LitStr>()?);
                 }
-                AgentAttributeKeys::Prompt => {
-                    prompt = Some(input.parse::<LitStr>()?);
+                AgentAttributeKeys::Description => {
+                    description = Some(input.parse::<LitStr>()?);
+                }
+                AgentAttributeKeys::Output => {
+                    output = Some(input.parse::<Type>()?);
                 }
                 AgentAttributeKeys::Tools => {
                     // Parse a bracketed list of identifiers
@@ -79,10 +87,16 @@ impl Parse for AgentAttributes {
                     format!("Missing attribute: {}", AgentAttributeKeys::Name),
                 )
             })?,
-            prompt: prompt.ok_or_else(|| {
+            description: description.ok_or_else(|| {
                 syn::Error::new(
                     input.span(),
-                    format!("Missing attribute: {}", AgentAttributeKeys::Prompt),
+                    format!("Missing attribute: {}", AgentAttributeKeys::Description),
+                )
+            })?,
+            output: output.ok_or_else(|| {
+                syn::Error::new(
+                    input.span(),
+                    format!("Missing attribute: {}", AgentAttributeKeys::Output),
                 )
             })?,
             tools,
@@ -99,19 +113,22 @@ impl AgentParser {
         let input_struct = parse_macro_input!(item as ItemStruct);
         let struct_name = &input_struct.ident;
         let agent_name_literal = agent_attrs.name;
-        let agent_prompt = agent_attrs.prompt;
+        let agent_description = agent_attrs.description;
         let tool_idents = agent_attrs.tools.unwrap_or_default();
+        let output_type = agent_attrs.output;
 
         let expanded = quote! {
             #input_struct
 
             impl AgentDeriveT for #struct_name {
+                type Output = #output_type;
+
                 fn name(&self) -> &'static str {
                     #agent_name_literal
                 }
 
-                fn prompt(&self) -> &'static str {
-                    #agent_prompt
+                fn description(&self) -> &'static str {
+                    #agent_description
                 }
 
                 fn tools(&self) -> Vec<Box<dyn ToolT>> {

@@ -43,7 +43,7 @@ impl AgentState {
 #[async_trait]
 pub trait RunnableAgent: Send + Sync + 'static {
     fn name(&self) -> &str;
-    fn prompt(&self) -> &str;
+    fn description(&self) -> &str;
     fn id(&self) -> Uuid;
 
     async fn run(
@@ -95,8 +95,8 @@ where
         &self.agent.name
     }
 
-    fn prompt(&self) -> &str {
-        &self.agent.prompt
+    fn description(&self) -> &str {
+        &self.agent.description
     }
 
     fn id(&self) -> Uuid {

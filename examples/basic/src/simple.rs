@@ -1,5 +1,5 @@
 use autoagents::core::agent::base::AgentDeriveT;
-use autoagents::core::agent::types::SimpleAgentBuilder;
+use autoagents::core::agent::prebuilt::SimpleAgentBuilder;
 use autoagents::core::environment::Environment;
 use autoagents::core::error::Error;
 use autoagents::core::protocol::Event;
@@ -26,8 +26,9 @@ fn get_weather(args: WeatherArgs) -> String {
 
 #[agent(
     name = "general_agent",
-    prompt = "You are general assistant and will answer user quesries in crips manner.",
-    tools = [WeatherTool]
+    description = "You are general assistant and will answer user quesries in crips manner.",
+    tools = [WeatherTool],
+    output = String,
 )]
 pub struct WeatherAgent {}
 
