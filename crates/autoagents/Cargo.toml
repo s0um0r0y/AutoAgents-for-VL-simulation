@@ -9,5 +9,5 @@ keywords.workspace = true
 categories.workspace = true
 
 [dependencies]
-autoagents-core = { path = "../core" }
-autoagents-llm = { path = "../llm" }
+autoagents-core.workspace = true
+autoagents-llm.workspace = true

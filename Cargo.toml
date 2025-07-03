@@ -20,6 +20,9 @@ keywords = ["agents", "llm"]
 categories = []
 
 [workspace.dependencies]
+autoagents-llm = { version = "0.1.1-alpha.0" }
+autoagents-derive = { version = "0.1.1-alpha.0" }
+autoagents-core = { version = "0.1.1-alpha.0" }
 syn = { version = "2.0.98", features = ["full"] }
 tokio = { version = "1.43.0", features = ["full"] }
 async-trait = "0.1.86"
@@ -41,3 +44,9 @@ env_logger = { version = "0.11" }
 chrono = { version = "0.4", default-features = false, features = ["serde"] }
 dirs = "6.0.0"
 regex = "1.11.1"
+
+
+[patch.crates-io]
+autoagents-llm = { path = "./crates/llm" }
+autoagents-core = { path = "./crates/core" }
+autoagents-derive = { path = "./crates/derive" }
