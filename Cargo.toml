@@ -15,7 +15,7 @@ version = "0.1.1-alpha.0"
 edition = "2021"
 license = "MIT OR Apache-2.0"
 description = "Agent Framework for Building Autonomous Agents"
-repository = "https://github.com/saivishwak/AutoAgents"
+repository = "https://github.com/liquidos-ai/AutoAgents"
 keywords = ["agents", "llm"]
 categories = []
 
