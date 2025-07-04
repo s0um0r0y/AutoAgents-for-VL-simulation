@@ -1,4 +1,5 @@
 use clap::{Parser, ValueEnum};
+use std::sync::Arc;
 mod chat;
 mod simple;
 use autoagents::{core::error::Error, llm::backends::openai::OpenAI, llm::builder::LLMBuilder};
@@ -23,7 +24,7 @@ async fn main() -> Result<(), Error> {
     let api_key = std::env::var("OPENAI_API_KEY").unwrap_or("".into());
 
     // Initialize and configure the LLM client
-    let llm = LLMBuilder::<OpenAI>::new()
+    let llm: Arc<OpenAI> = LLMBuilder::<OpenAI>::new()
         .api_key(api_key) // Set the API key
         .model("gpt-4o") // Use GPT-4o-mini model
         .max_tokens(512) // Limit response length

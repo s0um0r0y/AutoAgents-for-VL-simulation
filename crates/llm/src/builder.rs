@@ -142,30 +142,6 @@ pub struct LLMBuilder<L: LLMProvider> {
     pub(crate) deployment_id: Option<String>,
     /// Voice
     pub(crate) voice: Option<String>,
-    /// Search parameters for providers that support search functionality
-    pub(crate) xai_search_mode: Option<String>,
-    /// XAI search source type
-    pub(crate) xai_search_source_type: Option<String>,
-    /// XAI search excluded websites
-    pub(crate) xai_search_excluded_websites: Option<Vec<String>>,
-    /// XAI search max results
-    pub(crate) xai_search_max_results: Option<u32>,
-    /// XAI search from date
-    pub(crate) xai_search_from_date: Option<String>,
-    /// XAI search to date
-    pub(crate) xai_search_to_date: Option<String>,
-    /// Use web search
-    pub(crate) openai_enable_web_search: Option<bool>,
-    /// OpenAI web search context
-    pub(crate) openai_web_search_context_size: Option<String>,
-    /// OpenAI web search user location type
-    pub(crate) openai_web_search_user_location_type: Option<String>,
-    /// OpenAI web search user location approximate country
-    pub(crate) openai_web_search_user_location_approximate_country: Option<String>,
-    /// OpenAI web search user location approximate city
-    pub(crate) openai_web_search_user_location_approximate_city: Option<String>,
-    /// OpenAI web search user location approximate region
-    pub(crate) openai_web_search_user_location_approximate_region: Option<String>,
 }
 
 impl<L: LLMProvider> Default for LLMBuilder<L> {
@@ -196,18 +172,6 @@ impl<L: LLMProvider> Default for LLMBuilder<L> {
             api_version: None,
             deployment_id: None,
             voice: None,
-            xai_search_mode: None,
-            xai_search_source_type: None,
-            xai_search_excluded_websites: None,
-            xai_search_max_results: None,
-            xai_search_from_date: None,
-            xai_search_to_date: None,
-            openai_enable_web_search: None,
-            openai_web_search_context_size: None,
-            openai_web_search_user_location_type: None,
-            openai_web_search_user_location_approximate_country: None,
-            openai_web_search_user_location_approximate_city: None,
-            openai_web_search_user_location_approximate_region: None,
         }
     }
 }

@@ -223,7 +223,7 @@ impl ModelsProvider for DeepSeek {}
 impl LLMProvider for DeepSeek {}
 
 impl LLMBuilder<DeepSeek> {
-    pub fn build(self) -> Result<Arc<dyn LLMProvider>, LLMError> {
+    pub fn build(self) -> Result<Arc<DeepSeek>, LLMError> {
         let api_key = self.api_key.ok_or_else(|| {
             LLMError::InvalidRequest("No API key provided for DeepSeek".to_string())
         })?;

@@ -2,8 +2,6 @@
 //!
 //! This module provides integration with Anthropic's Claude models through their API.
 
-use std::{collections::HashMap, sync::Arc};
-
 use crate::{
     builder::{LLMBackend, LLMBuilder},
     chat::{ChatMessage, ChatProvider, ChatResponse, ChatRole, MessageType, Tool, ToolChoice},
@@ -11,7 +9,7 @@ use crate::{
     embedding::EmbeddingProvider,
     error::LLMError,
     models::{ModelListRawEntry, ModelListRequest, ModelListResponse, ModelsProvider},
-    FunctionCall, LLMProvider, ToolCall,
+    FunctionCall, ToolCall,
 };
 use async_trait::async_trait;
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
@@ -20,6 +18,7 @@ use futures::stream::Stream;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::{collections::HashMap, sync::Arc};
 
 /// Client for interacting with Anthropic's API.
 ///
@@ -743,7 +742,7 @@ fn parse_anthropic_sse_chunk(chunk: &str) -> Result<Option<String>, LLMError> {
 }
 
 impl LLMBuilder<Anthropic> {
-    pub fn build(self) -> Result<Arc<dyn LLMProvider>, LLMError> {
+    pub fn build(self) -> Result<Arc<Anthropic>, LLMError> {
         let (tools, tool_choice) = self.validate_tool_config()?;
         let api_key = self.api_key.ok_or_else(|| {
             LLMError::InvalidRequest("No API key provided for Anthropic".to_string())

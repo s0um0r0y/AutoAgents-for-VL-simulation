@@ -406,6 +406,51 @@ impl OpenAI {
             web_search_user_location_approximate_region,
         }
     }
+
+    /// Enable web search
+    pub fn set_enable_web_search(mut self, enable: bool) -> Self {
+        self.enable_web_search = Some(enable);
+        self
+    }
+
+    /// Set the web search context
+    pub fn set_web_search_context_size(mut self, context_size: impl Into<String>) -> Self {
+        self.web_search_context_size = Some(context_size.into());
+        self
+    }
+
+    /// Set the web search user location type
+    pub fn set_web_search_user_location_type(mut self, location_type: impl Into<String>) -> Self {
+        self.web_search_user_location_type = Some(location_type.into());
+        self
+    }
+
+    /// Set the web search user location approximate country
+    pub fn set_web_search_user_location_approximate_country(
+        mut self,
+        country: impl Into<String>,
+    ) -> Self {
+        self.web_search_user_location_approximate_country = Some(country.into());
+        self
+    }
+
+    /// Set the web search user location approximate city
+    pub fn set_web_search_user_location_approximate_city(
+        mut self,
+        city: impl Into<String>,
+    ) -> Self {
+        self.web_search_user_location_approximate_city = Some(city.into());
+        self
+    }
+
+    /// Set the web search user location approximate region
+    pub fn set_web_search_user_location_approximate_region(
+        mut self,
+        region: impl Into<String>,
+    ) -> Self {
+        self.web_search_user_location_approximate_region = Some(region.into());
+        self
+    }
 }
 
 #[async_trait]
@@ -917,55 +962,7 @@ impl LLMBuilder<OpenAI> {
         self
     }
 
-    /// Enable web search
-    pub fn openai_enable_web_search(mut self, enable: bool) -> Self {
-        self.openai_enable_web_search = Some(enable);
-        self
-    }
-
-    /// Set the web search context
-    pub fn openai_web_search_context_size(mut self, context_size: impl Into<String>) -> Self {
-        self.openai_web_search_context_size = Some(context_size.into());
-        self
-    }
-
-    /// Set the web search user location type
-    pub fn openai_web_search_user_location_type(
-        mut self,
-        location_type: impl Into<String>,
-    ) -> Self {
-        self.openai_web_search_user_location_type = Some(location_type.into());
-        self
-    }
-
-    /// Set the web search user location approximate country
-    pub fn openai_web_search_user_location_approximate_country(
-        mut self,
-        country: impl Into<String>,
-    ) -> Self {
-        self.openai_web_search_user_location_approximate_country = Some(country.into());
-        self
-    }
-
-    /// Set the web search user location approximate city
-    pub fn openai_web_search_user_location_approximate_city(
-        mut self,
-        city: impl Into<String>,
-    ) -> Self {
-        self.openai_web_search_user_location_approximate_city = Some(city.into());
-        self
-    }
-
-    /// Set the web search user location approximate region
-    pub fn openai_web_search_user_location_approximate_region(
-        mut self,
-        region: impl Into<String>,
-    ) -> Self {
-        self.openai_web_search_user_location_approximate_region = Some(region.into());
-        self
-    }
-
-    pub fn build(self) -> Result<Arc<dyn LLMProvider>, LLMError> {
+    pub fn build(self) -> Result<Arc<OpenAI>, LLMError> {
         let (tools, tool_choice) = self.validate_tool_config()?;
         let key = self.api_key.ok_or_else(|| {
             LLMError::InvalidRequest("No API key provided for OpenAI".to_string())
@@ -988,12 +985,12 @@ impl LLMBuilder<OpenAI> {
             self.reasoning_effort,
             self.json_schema,
             self.voice,
-            self.openai_enable_web_search,
-            self.openai_web_search_context_size,
-            self.openai_web_search_user_location_type,
-            self.openai_web_search_user_location_approximate_country,
-            self.openai_web_search_user_location_approximate_city,
-            self.openai_web_search_user_location_approximate_region,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
         );
 
         Ok(Arc::new(openai))

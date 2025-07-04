@@ -1046,7 +1046,7 @@ fn parse_google_sse_chunk(chunk: &str) -> Result<Option<String>, LLMError> {
 impl ModelsProvider for Google {}
 
 impl LLMBuilder<Google> {
-    pub fn build(self) -> Result<Arc<dyn LLMProvider>, LLMError> {
+    pub fn build(self) -> Result<Arc<Google>, LLMError> {
         let (tools, _) = self.validate_tool_config()?;
         let api_key = self.api_key.ok_or_else(|| {
             LLMError::InvalidRequest("No API key provided for Google".to_string())

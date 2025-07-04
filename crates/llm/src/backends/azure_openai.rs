@@ -593,7 +593,7 @@ impl LLMProvider for AzureOpenAI {
 impl ModelsProvider for AzureOpenAI {}
 
 impl LLMBuilder<AzureOpenAI> {
-    pub fn build(self) -> Result<Arc<dyn LLMProvider>, LLMError> {
+    pub fn build(self) -> Result<Arc<AzureOpenAI>, LLMError> {
         let (tools, tool_choice) = self.validate_tool_config()?;
         let endpoint = self.base_url.ok_or_else(|| {
             LLMError::InvalidRequest("No API endpoint provided for Azure OpenAI".into())

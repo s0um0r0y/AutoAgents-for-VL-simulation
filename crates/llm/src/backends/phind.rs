@@ -295,7 +295,7 @@ impl ModelsProvider for Phind {}
 impl LLMProvider for Phind {}
 
 impl LLMBuilder<Phind> {
-    pub fn build(self) -> Result<Arc<dyn LLMProvider>, LLMError> {
+    pub fn build(self) -> Result<Arc<Phind>, LLMError> {
         let phind = crate::backends::phind::Phind::new(
             self.model,
             self.max_tokens,

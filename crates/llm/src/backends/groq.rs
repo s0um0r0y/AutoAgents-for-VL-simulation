@@ -219,7 +219,7 @@ impl ModelsProvider for Groq {}
 impl LLMProvider for Groq {}
 
 impl LLMBuilder<Groq> {
-    pub fn build(self) -> Result<Arc<dyn LLMProvider>, LLMError> {
+    pub fn build(self) -> Result<Arc<Groq>, LLMError> {
         let api_key = self
             .api_key
             .ok_or_else(|| LLMError::InvalidRequest("No API key provided for Groq".to_string()))?;

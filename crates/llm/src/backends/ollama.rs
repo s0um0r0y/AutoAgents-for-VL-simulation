@@ -9,7 +9,7 @@ use crate::{
     embedding::EmbeddingProvider,
     error::LLMError,
     models::ModelsProvider,
-    FunctionCall, LLMProvider, ToolCall,
+    FunctionCall, ToolCall,
 };
 use async_trait::async_trait;
 use reqwest::Client;
@@ -540,7 +540,7 @@ impl crate::LLMProvider for Ollama {
 }
 
 impl LLMBuilder<Ollama> {
-    pub fn build(self) -> Result<Arc<dyn LLMProvider>, LLMError> {
+    pub fn build(self) -> Result<Arc<Ollama>, LLMError> {
         let (tools, _) = self.validate_tool_config()?;
         let url = self
             .base_url
