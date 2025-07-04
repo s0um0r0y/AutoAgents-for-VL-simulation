@@ -1,5 +1,5 @@
 use autoagents::core::agent::base::AgentDeriveT;
-use autoagents::core::agent::prebuilt::SimpleAgentBuilder;
+use autoagents::core::agent::prebuilt::default::AgentBuilder;
 use autoagents::core::environment::Environment;
 use autoagents::core::error::Error;
 use autoagents::core::protocol::Event;
@@ -44,7 +44,7 @@ fn handle_events(event_stream: Option<ReceiverStream<Event>>) {
 
 pub async fn simple_agent(llm: Arc<dyn LLMProvider>) -> Result<(), Error> {
     // Build a Simple agent
-    let agent = SimpleAgentBuilder::from_agent(WeatherAgent {})
+    let agent = AgentBuilder::from_agent(WeatherAgent {})
         .with_llm(llm)
         .build()
         .unwrap();
