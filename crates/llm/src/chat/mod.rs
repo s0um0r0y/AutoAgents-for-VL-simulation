@@ -140,7 +140,7 @@ pub struct FunctionTool {
 /// ## Example
 ///
 /// ```
-/// use llm::chat::StructuredOutputFormat;
+/// use autoagents_llm::chat::StructuredOutputFormat;
 /// use serde_json::json;
 ///
 /// let response_format = r#"
@@ -424,6 +424,7 @@ impl ChatMessageBuilder {
 /// # Returns
 ///
 /// A pinned stream of text tokens or an error
+#[allow(dead_code)]
 pub(crate) fn create_sse_stream<F>(
     response: reqwest::Response,
     parser: F,

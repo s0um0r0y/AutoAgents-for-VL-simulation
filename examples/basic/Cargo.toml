@@ -4,10 +4,11 @@ version = "0.1.1-alpha.0"
 edition = "2021"
 
 [dependencies]
-autoagents = { path = "../../crates/autoagents" }
-autoagents-core = { path = "../../crates/core" }
-autoagents-llm = { path = "../../crates/llm" }
 autoagents-derive = { path = "../../crates/derive" }
+autoagents = { path = "../../crates/autoagents", features = [
+    "openai",
+    "anthropic",
+] }
 tokio = { workspace = true }
 futures = { workspace = true }
 serde = { workspace = true }

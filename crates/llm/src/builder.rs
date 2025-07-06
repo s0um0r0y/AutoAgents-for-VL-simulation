@@ -58,7 +58,7 @@ pub enum LLMBackend {
 ///
 /// ```
 /// use std::str::FromStr;
-/// use llm::builder::LLMBackend;
+/// use autoagents_llm::builder::LLMBackend;
 ///
 /// let backend = LLMBackend::from_str("openai").unwrap();
 /// assert!(matches!(backend, LLMBackend::OpenAI));
@@ -141,6 +141,7 @@ pub struct LLMBuilder<L: LLMProvider> {
     /// Deployment Id
     pub(crate) deployment_id: Option<String>,
     /// Voice
+    #[allow(dead_code)]
     pub(crate) voice: Option<String>,
 }
 
@@ -347,6 +348,7 @@ impl<L: LLMProvider> LLMBuilder<L> {
     }
 
     // Validate that tool configuration is consistent and valid
+    #[allow(dead_code)]
     pub(crate) fn validate_tool_config(
         &self,
     ) -> Result<(Option<Vec<Tool>>, Option<ToolChoice>), LLMError> {

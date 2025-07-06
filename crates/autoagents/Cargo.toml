@@ -8,6 +8,20 @@ repository.workspace = true
 keywords.workspace = true
 categories.workspace = true
 
+[features]
+default = []
+full = ["autoagents-core/full", "autoagents-llm/full"]
+openai = ["autoagents-core/openai", "autoagents-llm/openai"]
+anthropic = ["autoagents-core/anthropic", "autoagents-llm/anthropic"]
+ollama = ["autoagents-core/ollama", "autoagents-llm/ollama"]
+deepseek = ["autoagents-core/deepseek", "autoagents-llm/deepseek"]
+xai = ["autoagents-core/xai", "autoagents-llm/xai"]
+phind = ["autoagents-core/phind", "autoagents-llm/phind"]
+google = ["autoagents-core/google", "autoagents-llm/google"]
+groq = ["autoagents-core/groq", "autoagents-llm/groq"]
+azure_openai = ["autoagents-core/azure_openai", "autoagents-llm/azure_openai"]
+logging = ["autoagents-core/logging", "autoagents-llm/logging"]
+
 [dependencies]
 autoagents-core.workspace = true
 autoagents-llm.workspace = true
