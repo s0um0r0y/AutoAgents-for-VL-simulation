@@ -1,6 +1,5 @@
-# AutoAgents
-
-**AutoAgents** is a distributed multi-agent framework written in Rust that enables you to build, deploy, and coordinate multiple intelligent agents. AutoAgents leverages modern language models and tool integrations to provide robust, scalable, and flexible solutions for various use cases—from natural language processing and automated chat to advanced tool orchestration.
+# AutoAgents 🚀
+A distributed multi-agent framework powered by Rust and modern LLMs.
 
 ---
 
@@ -31,61 +30,99 @@ cargo build --release
 
 ### LLM Tool Calling
 ```rs
+use autoagents::core::agent::base::AgentBuilder;
+use autoagents::core::agent::{AgentDeriveT, ReActExecutor};
+use autoagents::core::environment::Environment;
+use autoagents::core::error::Error;
+use autoagents::core::memory::SlidingWindowMemory;
+use autoagents::llm::{LLMProvider, ToolCallError, ToolInputT, ToolT};
+use autoagents_derive::{agent, tool, ToolInput};
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
+use std::sync::Arc;
+
 #[derive(Serialize, Deserialize, ToolInput, Debug)]
-pub struct WeatherArgs {}
+pub struct WeatherArgs {
+    #[input(description = "City to get weather for")]
+    city: String,
+}
 
 #[tool(
     name = "WeatherTool",
-    description = "Use this tool to get current weather in celcius",
+    description = "Use this tool to get current weather in celsius",
     input = WeatherArgs,
-    output = String
 )]
-fn get_weather(args: WeatherArgs) -> String {
+fn get_weather(args: WeatherArgs) -> Result<String, ToolCallError> {
     println!("ToolCall: GetWeather {:?}", args);
-    "23 degree".into()
-}
-
-#[agent(
-    name = "general_agent",
-    prompt = "You are general assistant and will answer user quesries in crips manner.",
-    tools = [WeatherTool]
-)]
-pub struct WeatherAgent {}
-
-fn handle_events(event_stream: Option<ReceiverStream<Event>>) {
-    if let Some(mut event_stream) = event_stream {
-        tokio::spawn(async move {
-            while let Some(event) = event_stream.next().await {
-                println!("Event: {:?}", event);
-            }
-        });
+    if args.city == "Hyderabad" {
+        Ok(format!(
+            "The current temperature in {} is 28 degrees celsius",
+            args.city
+        ))
+    } else if args.city == "New York" {
+        Ok(format!(
+            "The current temperature in {} is 15 degrees celsius",
+            args.city
+        ))
+    } else {
+        Err(ToolCallError::RuntimeError(
+            format!("Weather for {} is not supported", args.city).into(),
+        ))
     }
 }
 
-pub async fn simple_agent(llm: Arc<dyn LLMProvider>) -> Result<(), Error> {
-    // Build a Simple agent
-    let agent = SimpleAgentBuilder::from_agent(WeatherAgent {})
-        .with_llm(llm)
-        .build()
-        .unwrap();
-    let mut environment = Environment::new(None).await;
-    let receiver = environment.take_event_receiver(None).await;
-    handle_events(receiver);
+#[agent(
+    name = "weather_agent",
+    description = "You are a weather assistant that helps users get weather information.",
+    tools = [WeatherTool],
+    executor = ReActExecutor,
+    output = String,
+)]
+pub struct WeatherAgent {}
 
-    let agent_id = environment.register_agent(agent, None).await?;
+pub async fn simple_agent(llm: Arc<dyn LLMProvider>) -> Result<(), Error> {
+    println!("Starting Weather Agent Example...\n");
+
+    let sliding_window_memory = Box::new(SlidingWindowMemory::new(10));
+
+    let weather_agent = WeatherAgent {};
+
+    let agent = AgentBuilder::new(weather_agent)
+        .with_llm(llm)
+        .with_memory(sliding_window_memory)
+        .build()?;
+
+    // Create environment and set up event handling
+    let mut environment = Environment::new(None).await;
+
+    // Register the agent
+    let agent_id = environment.register_agent(agent.clone(), None).await?;
+
+    // Add tasks
     let _ = environment
-        .add_task(agent_id, "What is the current weather??")
+        .add_task(agent_id, "What is the weather in Hyderabad and New York?")
         .await?;
+
     let _ = environment
         .add_task(
             agent_id,
-            "What is the weather you just said? reply back in beautiful format.",
+            "Compare the weather between Hyderabad and New York. Which city is warmer?",
         )
         .await?;
 
-    let result = environment.run_all(agent_id, None).await?;
-    println!("Result {:?}", result);
+    // Run all tasks
+    let results = environment.run_all(agent_id, None).await?;
+    println!("Results: {:?}", results.last());
+
+    // Shutdown
     let _ = environment.shutdown().await;
     Ok(())
 }
 ```
+
+
+## Contributing
+We welcome contributions!
+
+## License
+MIT OR Apache-2.0. See [MIT_LICENSE](MIT_LICENSE) or [APACHE_LICENSE](APACHE_LICENSE) for more.
