@@ -1,7 +1,10 @@
 # AutoAgents 🚀
 A distributed multi-agent framework powered by Rust and modern LLMs.
 
-[![Coding Agent Demo](https://img.youtube.com/vi/MZLd4aRuftM/hqdefault.jpg)](https://youtu.be/MZLd4aRuftM?si=XbHitYjgyffyOf5D)
+
+🎥 **Watch the full demo on YouTube** to see AutoAgents in action!
+
+[![Coding Agent Demo](https://img.youtube.com/vi/MZLd4aRuftM/maxresdefault.jpg)](https://youtu.be/MZLd4aRuftM?si=XbHitYjgyffyOf5D)
 
 ---
 
