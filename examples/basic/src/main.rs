@@ -1,12 +1,13 @@
 use clap::{Parser, ValueEnum};
 use std::sync::Arc;
-mod chat;
+mod events;
 mod simple;
 use autoagents::{core::error::Error, llm::backends::openai::OpenAI, llm::builder::LLMBuilder};
 
 #[derive(Debug, Clone, ValueEnum)]
 enum UseCase {
     Simple,
+    Events,
 }
 
 /// Simple program to demonstrate AutoAgents functionality
@@ -35,6 +36,7 @@ async fn main() -> Result<(), Error> {
 
     match args.usecase {
         UseCase::Simple => simple::simple_agent(llm).await?,
+        UseCase::Events => events::events_agent(llm).await?,
     }
 
     Ok(())

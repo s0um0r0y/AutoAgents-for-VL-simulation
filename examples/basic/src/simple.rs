@@ -1,70 +1,88 @@
-use autoagents::core::agent::base::AgentDeriveT;
-use autoagents::core::agent::prebuilt::default::AgentBuilder;
+use autoagents::core::agent::base::AgentBuilder;
 use autoagents::core::environment::Environment;
 use autoagents::core::error::Error;
-use autoagents::core::protocol::Event;
-use autoagents::llm::{LLMProvider, ToolInputT, ToolT};
+use autoagents::llm::{LLMProvider, ToolCallError, ToolInputT, ToolT};
+use autoagents_core::agent::{AgentDeriveT, ReActExecutor};
+use autoagents_core::memory::SlidingWindowMemory;
 use autoagents_derive::{agent, tool, ToolInput};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::sync::Arc;
-use tokio_stream::{wrappers::ReceiverStream, StreamExt};
 
 #[derive(Serialize, Deserialize, ToolInput, Debug)]
-pub struct WeatherArgs {}
+pub struct WeatherArgs {
+    #[input(description = "City to get weather for")]
+    city: String,
+}
 
 #[tool(
     name = "WeatherTool",
-    description = "Use this tool to get current weather in celcius",
+    description = "Use this tool to get current weather in celsius",
     input = WeatherArgs,
-    output = String
 )]
-fn get_weather(args: WeatherArgs) -> String {
+fn get_weather(args: WeatherArgs) -> Result<String, ToolCallError> {
     println!("ToolCall: GetWeather {:?}", args);
-    "23 degree".into()
+    if args.city == "Hyderabad" {
+        Ok(format!(
+            "The current temperature in {} is 28 degrees celsius",
+            args.city
+        ))
+    } else if args.city == "New York" {
+        Ok(format!(
+            "The current temperature in {} is 15 degrees celsius",
+            args.city
+        ))
+    } else {
+        Err(ToolCallError::RuntimeError(
+            format!("Weather for {} is not supported", args.city).into(),
+        ))
+    }
 }
 
 #[agent(
-    name = "general_agent",
-    description = "You are general assistant and will answer user quesries in crips manner.",
+    name = "weather_agent",
+    description = "You are a weather assistant that helps users get weather information.",
     tools = [WeatherTool],
+    executor = ReActExecutor,
     output = String,
 )]
 pub struct WeatherAgent {}
 
-fn handle_events(event_stream: Option<ReceiverStream<Event>>) {
-    if let Some(mut event_stream) = event_stream {
-        tokio::spawn(async move {
-            while let Some(event) = event_stream.next().await {
-                println!("Event: {:?}", event);
-            }
-        });
-    }
-}
-
 pub async fn simple_agent(llm: Arc<dyn LLMProvider>) -> Result<(), Error> {
-    // Build a Simple agent
-    let agent = AgentBuilder::from_agent(WeatherAgent {})
-        .with_llm(llm)
-        .build()
-        .unwrap();
-    let mut environment = Environment::new(None).await;
-    let receiver = environment.take_event_receiver(None).await;
-    handle_events(receiver);
+    println!("Starting Weather Agent Example...\n");
 
-    let agent_id = environment.register_agent(agent, None).await?;
+    let sliding_window_memory = Box::new(SlidingWindowMemory::new(10));
+
+    let weather_agent = WeatherAgent {};
+
+    let agent = AgentBuilder::new(weather_agent)
+        .with_llm(llm)
+        .with_memory(sliding_window_memory)
+        .build()?;
+
+    // Create environment and set up event handling
+    let mut environment = Environment::new(None).await;
+
+    // Register the agent
+    let agent_id = environment.register_agent(agent.clone(), None).await?;
+
+    // Add tasks
     let _ = environment
-        .add_task(agent_id, "What is the current weather??")
+        .add_task(agent_id, "What is the weather in Hyderabad and New York?")
         .await?;
+
     let _ = environment
         .add_task(
             agent_id,
-            "What is the weather you just said? reply back in beautiful format.",
+            "Compare the weather between Hyderabad and New York. Which city is warmer?",
         )
         .await?;
 
-    let result = environment.run_all(agent_id, None).await?;
-    println!("Result {:?}", result);
+    // Run all tasks
+    let results = environment.run_all(agent_id, None).await?;
+    println!("Results: {:?}", results.last());
+
+    // Shutdown
     let _ = environment.shutdown().await;
     Ok(())
 }
