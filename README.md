@@ -1,5 +1,5 @@
 # AutoAgents 🚀
-A distributed multi-agent framework powered by Rust and modern LLMs.
+A multi-agent framework powered by Rust and modern LLMs.
 
 
 🎥 **Watch the full demo on YouTube** to see AutoAgents in action!
@@ -10,7 +10,6 @@ A distributed multi-agent framework powered by Rust and modern LLMs.
 
 ## Features
 
-- **Distributed Architecture:** Coordinate multiple agents across different nodes.
 - **Multi-Agent Coordination:** Allow agents to interact, share knowledge, and collaborate on complex tasks.
 - **Tool Integration:** Seamlessly integrate with external tools and services to extend agent capabilities.
 - **Extensible Framework:** Easily add new providers and tools using our intuitive plugin system.
