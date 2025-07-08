@@ -68,11 +68,11 @@ impl Environment {
     pub async fn get_session_or_default(
         &self,
         session_id: Option<SessionId>,
-    ) -> Result<Arc<Mutex<Session>>, EnvironmentError> {
+    ) -> Result<Arc<Mutex<Session>>, Error> {
         let sid = session_id.unwrap_or(self.default_session);
         self.get_session(Some(sid))
             .await
-            .ok_or_else(|| EnvironmentError::SessionNotFound(sid))
+            .ok_or_else(|| EnvironmentError::SessionNotFound(sid).into())
     }
 
     pub async fn get_session_mut(
@@ -87,7 +87,7 @@ impl Environment {
         &self,
         agent: Arc<dyn RunnableAgent>,
         session_id: Option<SessionId>,
-    ) -> Result<AgentID, EnvironmentError> {
+    ) -> Result<AgentID, Error> {
         let agent_id = Uuid::new_v4();
         self.register_agent_with_id(agent_id, agent, session_id)
             .await?;
@@ -99,7 +99,7 @@ impl Environment {
         agent_id: AgentID,
         agent: Arc<dyn RunnableAgent>,
         session_id: Option<SessionId>,
-    ) -> Result<(), EnvironmentError> {
+    ) -> Result<(), Error> {
         let session_arc = self.get_session_or_default(session_id).await?;
         let session = session_arc.lock().await;
         session.register_agent_with_id(agent_id, agent).await;
