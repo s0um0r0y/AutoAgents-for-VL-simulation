@@ -1,5 +1,6 @@
 use crate::agent::result::AgentRunResult;
 use crate::agent::runnable::RunnableAgent;
+use crate::error::Error;
 use crate::protocol::{AgentID, Event, SessionId, SubmissionId};
 use crate::session::{Session, SessionError, SessionManager, Task};
 
@@ -109,7 +110,7 @@ impl Environment {
         &self,
         agent_id: Uuid,
         task: T,
-    ) -> Result<SubmissionId, EnvironmentError> {
+    ) -> Result<SubmissionId, Error> {
         let task = Task::new(task, Some(agent_id));
         let sub_id = task.submission_id;
         let session_arc = self.get_session_or_default(None).await?;
@@ -123,37 +124,37 @@ impl Environment {
         agent_id: AgentID,
         sub_id: SubmissionId,
         session_id: Option<SessionId>,
-    ) -> Result<AgentRunResult, EnvironmentError> {
+    ) -> Result<AgentRunResult, Error> {
         let session_arc = self.get_session_or_default(session_id).await?;
         let session = session_arc.lock().await;
         let task = session.get_task(sub_id).await;
-        Ok(session.run_task(task, agent_id).await?)
+        session.run_task(task, agent_id).await
     }
 
     pub async fn run(
         &self,
         agent_id: AgentID,
         session_id: Option<SessionId>,
-    ) -> Result<AgentRunResult, EnvironmentError> {
+    ) -> Result<AgentRunResult, Error> {
         let session_arc = self.get_session_or_default(session_id).await?;
         let session = session_arc.lock().await;
-        Ok(session.run(agent_id).await?)
+        session.run(agent_id).await
     }
 
     pub async fn run_all(
         &self,
         agent_id: AgentID,
         session_id: Option<SessionId>,
-    ) -> Result<Vec<AgentRunResult>, EnvironmentError> {
+    ) -> Result<Vec<AgentRunResult>, Error> {
         let session_arc = self.get_session_or_default(session_id).await?;
         let session = session_arc.lock().await;
-        Ok(session.run_all(agent_id).await?)
+        session.run_all(agent_id).await
     }
 
     pub async fn event_sender(
         &self,
         session_id: Option<SessionId>,
-    ) -> Result<mpsc::Sender<Event>, EnvironmentError> {
+    ) -> Result<mpsc::Sender<Event>, Error> {
         let session_arc = self.get_session_or_default(session_id).await?;
         let session = session_arc.lock().await;
         Ok(session.event_sender().clone())

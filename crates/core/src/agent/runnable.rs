@@ -1,6 +1,7 @@
 use super::base::{AgentDeriveT, BaseAgent};
 use super::error::RunnableAgentError;
 use super::result::AgentRunResult;
+use crate::error::Error;
 use crate::memory::MemoryProvider;
 use crate::protocol::{Event, TaskResult};
 use crate::session::Task;
@@ -47,7 +48,7 @@ pub trait RunnableAgent: Send + Sync + 'static {
         self: Arc<Self>,
         task: Task,
         tx_event: mpsc::Sender<Event>,
-    ) -> Result<AgentRunResult, RunnableAgentError>;
+    ) -> Result<AgentRunResult, Error>;
 
     fn memory(&self) -> Option<Arc<RwLock<Box<dyn MemoryProvider>>>>;
 
@@ -55,7 +56,7 @@ pub trait RunnableAgent: Send + Sync + 'static {
         self: Arc<Self>,
         task: Task,
         tx_event: mpsc::Sender<Event>,
-    ) -> JoinHandle<Result<AgentRunResult, RunnableAgentError>> {
+    ) -> JoinHandle<Result<AgentRunResult, Error>> {
         tokio::spawn(async move { self.run(task, tx_event).await })
     }
 }
@@ -106,7 +107,7 @@ where
         self: Arc<Self>,
         task: Task,
         tx_event: mpsc::Sender<Event>,
-    ) -> Result<AgentRunResult, RunnableAgentError> {
+    ) -> Result<AgentRunResult, Error> {
         // Record the task in state
         {
             let mut state = self.state.write().await;
@@ -167,7 +168,7 @@ where
                     })
                     .await;
 
-                Err(RunnableAgentError::ExecutorError(error_msg))
+                Err(RunnableAgentError::ExecutorError(error_msg).into())
             }
         }
     }

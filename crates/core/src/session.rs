@@ -1,6 +1,7 @@
 use crate::agent::error::RunnableAgentError;
 use crate::agent::result::AgentRunResult;
 use crate::agent::runnable::RunnableAgent;
+use crate::error::Error;
 use crate::protocol::{AgentID, Event, SessionId, SubmissionId};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -85,7 +86,7 @@ impl Session {
         )
     }
 
-    pub async fn add_task(&self, task: Task) -> Result<(), SessionError> {
+    pub async fn add_task(&self, task: Task) -> Result<(), Error> {
         let task_clone = task.clone();
         self.tx_event
             .send(Event::NewTask {
@@ -93,7 +94,8 @@ impl Session {
                 agent_id: task_clone.agent_id,
                 prompt: task_clone.prompt,
             })
-            .await?;
+            .await
+            .map_err(SessionError::EventError)?;
         let mut state = self.state.lock().await;
         state.task_queue.push(task);
         Ok(())
@@ -150,7 +152,7 @@ impl Session {
         &self,
         task: Option<Task>,
         agent_id: AgentID,
-    ) -> Result<AgentRunResult, SessionError> {
+    ) -> Result<AgentRunResult, Error> {
         let task = task.ok_or_else(|| SessionError::EmptyTask)?;
         let agent = self
             .agents
@@ -163,16 +165,16 @@ impl Session {
         let join_handle = agent.spawn_task(task, self.tx_event.clone());
 
         // Await the task completion:
-        let result = join_handle.await?;
-        Ok(result?)
+        let result = join_handle.await.map_err(SessionError::TaskJoinError);
+        result?
     }
 
-    pub async fn run(&self, agent_id: Uuid) -> Result<AgentRunResult, SessionError> {
+    pub async fn run(&self, agent_id: Uuid) -> Result<AgentRunResult, Error> {
         let task = self.get_top_task().await;
         self.run_task(task, agent_id).await
     }
 
-    pub async fn run_all(&self, agent_id: Uuid) -> Result<Vec<AgentRunResult>, SessionError> {
+    pub async fn run_all(&self, agent_id: Uuid) -> Result<Vec<AgentRunResult>, Error> {
         let mut results = Vec::new();
         while !self.is_task_queue_empty().await {
             let result = self.run(agent_id).await?;

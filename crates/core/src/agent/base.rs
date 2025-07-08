@@ -1,5 +1,5 @@
 use super::{error::AgentBuildError, AgentExecutor, IntoRunnable, RunnableAgent};
-use crate::memory::MemoryProvider;
+use crate::{error::Error, memory::MemoryProvider};
 use async_trait::async_trait;
 use autoagents_llm::{LLMProvider, ToolT};
 use serde::{de::DeserializeOwned, Serialize};
@@ -129,7 +129,7 @@ impl<T: AgentDeriveT + AgentExecutor> AgentBuilder<T> {
     }
 
     /// Build the BaseAgent
-    pub fn build(self) -> Result<Arc<dyn RunnableAgent>, AgentBuildError> {
+    pub fn build(self) -> Result<Arc<dyn RunnableAgent>, Error> {
         let llm = self.llm.ok_or(AgentBuildError::BuildFailure(
             "LLM provider is required".to_string(),
         ))?;
@@ -140,7 +140,7 @@ impl<T: AgentDeriveT + AgentExecutor> AgentBuilder<T> {
     pub fn build_with_memory(
         self,
         memory: Box<dyn MemoryProvider>,
-    ) -> Result<Arc<dyn RunnableAgent>, AgentBuildError> {
+    ) -> Result<Arc<dyn RunnableAgent>, Error> {
         let llm = self.llm.ok_or(AgentBuildError::BuildFailure(
             "LLM provider is required".to_string(),
         ))?;

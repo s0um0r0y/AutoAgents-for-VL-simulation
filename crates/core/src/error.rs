@@ -1,5 +1,7 @@
+use autoagents_llm::error::LLMError;
+
 use crate::{
-    agent::{error::AgentBuildError, error::RunnableAgentError},
+    agent::error::{AgentBuildError, RunnableAgentError},
     environment::EnvironmentError,
     session::SessionError,
 };
@@ -14,4 +16,6 @@ pub enum Error {
     AgentBuildError(#[from] AgentBuildError),
     #[error(transparent)]
     RunnableAgentError(#[from] RunnableAgentError),
+    #[error(transparent)]
+    LLMError(#[from] LLMError),
 }
