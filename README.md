@@ -13,7 +13,7 @@ A multi-agent framework powered by Rust and modern LLMs.
 - **Multi-Agent Coordination:** Allow agents to interact, share knowledge, and collaborate on complex tasks.
 - **Tool Integration:** Seamlessly integrate with external tools and services to extend agent capabilities.
 - **Extensible Framework:** Easily add new providers and tools using our intuitive plugin system.
-
+- **Structured Agent Output:** Easily add json schema for agent Output
 ---
 
 ## Supported Providers
@@ -35,63 +35,61 @@ cargo build --release
 ### LLM Tool Calling
 ```rs
 use autoagents::core::agent::base::AgentBuilder;
-use autoagents::core::agent::{AgentDeriveT, ReActExecutor};
+use autoagents::core::agent::output::AgentOutputT;
+use autoagents::core::agent::{AgentDeriveT, ReActAgentOutput, ReActExecutor};
 use autoagents::core::environment::Environment;
 use autoagents::core::error::Error;
 use autoagents::core::memory::SlidingWindowMemory;
 use autoagents::llm::{LLMProvider, ToolCallError, ToolInputT, ToolT};
-use autoagents_derive::{agent, tool, ToolInput};
+use autoagents_derive::{agent, tool, AgentOutput, ToolInput};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::sync::Arc;
 
 #[derive(Serialize, Deserialize, ToolInput, Debug)]
-pub struct WeatherArgs {
-    #[input(description = "City to get weather for")]
-    city: String,
+pub struct AdditionArgs {
+    #[input(description = "Left Operand for addition")]
+    left: i64,
+    #[input(description = "Right Operand for addition")]
+    right: i64,
 }
 
 #[tool(
-    name = "WeatherTool",
-    description = "Use this tool to get current weather in celsius",
-    input = WeatherArgs,
+    name = "Addition",
+    description = "Use this tool to Add two numbers",
+    input = AdditionArgs,
 )]
-fn get_weather(args: WeatherArgs) -> Result<String, ToolCallError> {
-    println!("ToolCall: GetWeather {:?}", args);
-    if args.city == "Hyderabad" {
-        Ok(format!(
-            "The current temperature in {} is 28 degrees celsius",
-            args.city
-        ))
-    } else if args.city == "New York" {
-        Ok(format!(
-            "The current temperature in {} is 15 degrees celsius",
-            args.city
-        ))
-    } else {
-        Err(ToolCallError::RuntimeError(
-            format!("Weather for {} is not supported", args.city).into(),
-        ))
-    }
+fn add(args: AdditionArgs) -> Result<i64, ToolCallError> {
+    println!("ToolCall: Add {:?}", args);
+    Ok(args.left + args.right)
+}
+
+/// Math agent output with Value and Explanation
+#[derive(Debug, Serialize, Deserialize, AgentOutput)]
+pub struct MathAgentOutput {
+    #[output(description = "The addition result")]
+    value: i64,
+    #[output(description = "Explanation of the logic")]
+    explanation: String,
 }
 
 #[agent(
-    name = "weather_agent",
-    description = "You are a weather assistant that helps users get weather information.",
-    tools = [WeatherTool],
+    name = "math_agent",
+    description = "You are a Math agent.",
+    tools = [Addition],
     executor = ReActExecutor,
-    output = String,
+    output = MathAgentOutput
 )]
-pub struct WeatherAgent {}
+pub struct MathAgent {}
 
-pub async fn simple_agent(llm: Arc<dyn LLMProvider>) -> Result<(), Error> {
-    println!("Starting Weather Agent Example...\n");
+pub async fn math_agent(llm: Arc<dyn LLMProvider>) -> Result<(), Error> {
+    println!("Starting Math Agent Example...\n");
 
     let sliding_window_memory = Box::new(SlidingWindowMemory::new(10));
 
-    let weather_agent = WeatherAgent {};
+    let agent = MathAgent {};
 
-    let agent = AgentBuilder::new(weather_agent)
+    let agent = AgentBuilder::new(agent)
         .with_llm(llm)
         .with_memory(sliding_window_memory)
         .build()?;
@@ -103,20 +101,17 @@ pub async fn simple_agent(llm: Arc<dyn LLMProvider>) -> Result<(), Error> {
     let agent_id = environment.register_agent(agent.clone(), None).await?;
 
     // Add tasks
-    let _ = environment
-        .add_task(agent_id, "What is the weather in Hyderabad and New York?")
-        .await?;
-
-    let _ = environment
-        .add_task(
-            agent_id,
-            "Compare the weather between Hyderabad and New York. Which city is warmer?",
-        )
-        .await?;
+    let _ = environment.add_task(agent_id, "What is 5 + 3?").await?;
 
     // Run all tasks
     let results = environment.run_all(agent_id, None).await?;
-    println!("Results: {:?}", results.last());
+    let last_result = results.last().unwrap();
+    let agent_output: MathAgentOutput =
+        last_result.extract_agent_output(ReActAgentOutput::extract_agent_output)?;
+    println!(
+        "Results: {}, {}",
+        agent_output.value, agent_output.explanation
+    );
 
     // Shutdown
     let _ = environment.shutdown().await;

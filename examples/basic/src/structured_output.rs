@@ -23,7 +23,7 @@ pub struct AdditionArgs {
     description = "Use this tool to Add two numbers",
     input = AdditionArgs,
 )]
-fn get_weather(args: AdditionArgs) -> Result<i64, ToolCallError> {
+fn add(args: AdditionArgs) -> Result<i64, ToolCallError> {
     println!("ToolCall: Add {:?}", args);
     Ok(args.left + args.right)
 }
