@@ -1,6 +1,10 @@
 # AutoAgents 🚀
-A multi-agent framework powered by Rust and modern LLMs.
+[![Latest version](https://img.shields.io/crates/v/autoagents.svg)](https://crates.io/crates/autoagents)
+[![Documentation](https://docs.rs/autoagents/badge.svg)](https://docs.rs/autoagents)
+![License](https://img.shields.io/crates/l/autoagents.svg)
+[![codecov](https://codecov.io/gh/liquidos-ai/AutoAgents/graph/badge.svg)](https://codecov.io/gh/liquidos-ai/AutoAgents)
 
+A multi-agent framework powered by Rust and modern LLMs.
 
 🎥 **Watch the full demo on YouTube** to see AutoAgents in action!
 
