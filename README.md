@@ -11,7 +11,7 @@
   [![Build Status](https://github.com/liquidos-ai/AutoAgents/workflows/coverage/badge.svg)](https://github.com/liquidos-ai/AutoAgents/actions)
   [![codecov](https://codecov.io/gh/liquidos-ai/AutoAgents/graph/badge.svg)](https://codecov.io/gh/liquidos-ai/AutoAgents)
 
-  [Documentation](https://docs.rs/autoagents) | [Examples](examples/) | [Contributing](CONTRIBUTING.md)
+  [Documentation](https://liquidos-ai.github.io/AutoAgents/) | [Examples](examples/) | [Contributing](CONTRIBUTING.md)
 </div>
 
 ---
