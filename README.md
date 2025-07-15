@@ -6,7 +6,7 @@
   **A Modern Multi-Agent Framework for Rust**
 
   [![Crates.io](https://img.shields.io/crates/v/autoagents.svg)](https://crates.io/crates/autoagents)
-  [![Documentation](https://docs.rs/autoagents/badge.svg)](https://docs.rs/autoagents)
+  [![Documentation](https://docs.rs/autoagents/badge.svg)](https://liquidos-ai.github.io/AutoAgents)
   [![License](https://img.shields.io/crates/l/autoagents.svg)](https://github.com/liquidos-ai/AutoAgents#license)
   [![Build Status](https://github.com/liquidos-ai/AutoAgents/workflows/coverage/badge.svg)](https://github.com/liquidos-ai/AutoAgents/actions)
   [![codecov](https://codecov.io/gh/liquidos-ai/AutoAgents/graph/badge.svg)](https://codecov.io/gh/liquidos-ai/AutoAgents)
@@ -245,7 +245,7 @@ We welcome contributions! Please see our [Code of Conduct](CODE_OF_CONDUCT.md) f
 
 ## 📖 Documentation
 
-- **[API Documentation](https://docs.rs/autoagents)**: Complete API reference
+- **[API Documentation](https://liquidos-ai.github.io/AutoAgents)**: Complete Framework Docs
 - **[Examples](examples/)**: Practical implementation examples
 
 ---
