@@ -44,7 +44,6 @@ fn get_weather(args: WeatherArgs) -> Result<String, ToolCallError> {
     description = "You are a weather assistant that helps users get weather information.",
     tools = [WeatherTool],
     executor = ReActExecutor,
-    output = String,
 )]
 pub struct WeatherAgent {}
 
@@ -80,7 +79,8 @@ pub async fn simple_agent(llm: Arc<dyn LLMProvider>) -> Result<(), Error> {
 
     // Run all tasks
     let results = environment.run_all(agent_id, None).await?;
-    println!("Results: {:?}", results.last());
+    let last_result = results.last().unwrap();
+    println!("Results: {}", last_result.output.as_ref().unwrap());
 
     // Shutdown
     let _ = environment.shutdown().await;

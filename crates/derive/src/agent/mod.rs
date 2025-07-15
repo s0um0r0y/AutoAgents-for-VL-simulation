@@ -6,11 +6,13 @@ use syn::{
     Token, Type,
 };
 
+pub(crate) mod output;
+
 pub(crate) struct AgentAttributes {
     pub(crate) name: LitStr,
     pub(crate) description: LitStr,
     pub(crate) tools: Option<Vec<Ident>>,
-    pub(crate) output: Type,
+    pub(crate) output: Option<Type>,
     pub(crate) executor_type: Type,
 }
 
@@ -81,7 +83,7 @@ impl Parse for AgentAttributes {
                 AgentAttributeKeys::Unknown(other) => {
                     return Err(syn::Error::new(
                         key_span,
-                        format!("Unexpected attribute key: {}", other),
+                        format!("Unexpected attribute key: {other}"),
                     ))
                 }
             }
@@ -102,12 +104,7 @@ impl Parse for AgentAttributes {
                     format!("Missing attribute: {}", AgentAttributeKeys::Description),
                 )
             })?,
-            output: output.ok_or_else(|| {
-                syn::Error::new(
-                    input.span(),
-                    format!("Missing attribute: {}", AgentAttributeKeys::Output),
-                )
-            })?,
+            output,
             executor_type: executor_type.ok_or_else(|| {
                 syn::Error::new(
                     input.span(),
@@ -133,15 +130,39 @@ impl AgentParser {
         let output_type = agent_attrs.output;
         let executor_type = agent_attrs.executor_type;
 
+        let quoted_output_type = match &output_type {
+            Some(output_ty) => quote! { #output_ty },
+            None => quote! { String },
+        };
+
+        let output_schema_impl = match &output_type {
+            Some(output_ty) => {
+                quote! {
+                    fn output_schema(&self) -> Option<Value> {
+                        Some(<#output_ty>::structured_output_format())
+                    }
+                }
+            }
+            None => {
+                quote! {
+                    fn output_schema(&self) -> Option<Value> {
+                        None
+                    }
+                }
+            }
+        };
+
         let expanded = quote! {
             #input_struct
 
             impl AgentDeriveT for #struct_name {
-                type Output = #output_type;
+                type Output = #quoted_output_type;
 
                 fn name(&self) -> &'static str {
                     #agent_name_literal
                 }
+
+                #output_schema_impl
 
                 fn description(&self) -> &'static str {
                     #agent_description
