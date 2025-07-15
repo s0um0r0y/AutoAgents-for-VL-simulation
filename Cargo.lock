@@ -99,6 +99,8 @@ version = "0.2.0-alpha.0"
 dependencies = [
  "autoagents-core",
  "autoagents-llm",
+ "serde_json",
+ "tokio",
 ]
 
 [[package]]
@@ -150,6 +152,7 @@ dependencies = [
  "serde_json",
  "strum",
  "strum_macros",
+ "tempfile",
  "thiserror 2.0.12",
  "tokio",
  "tokio-stream",
