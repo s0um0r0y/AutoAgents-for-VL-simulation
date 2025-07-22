@@ -47,7 +47,7 @@ AutoAgents is a cutting-edge multi-agent framework built in Rust that enables th
 ### 🤖 **Multi-Agent Orchestration**
 - **Agent Coordination**: Seamless communication and collaboration between multiple agents
 - **Task Distribution**: Intelligent workload distribution across agent networks
-- **Knowledge Sharing**: Shared memory and context between agents (In Roadmap
+- **Knowledge Sharing**: Shared memory and context between agents (In Roadmap)
 
 ---
 
