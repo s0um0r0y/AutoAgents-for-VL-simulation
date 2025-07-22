@@ -13,7 +13,6 @@ pub(crate) struct AgentAttributes {
     pub(crate) description: LitStr,
     pub(crate) tools: Option<Vec<Ident>>,
     pub(crate) output: Option<Type>,
-    pub(crate) executor_type: Type,
 }
 
 #[derive(EnumString, Display)]
@@ -26,8 +25,6 @@ pub(crate) enum AgentAttributeKeys {
     Tools,
     #[strum(serialize = "output")]
     Output,
-    #[strum(serialize = "executor")]
-    Executor,
     Unknown(String),
 }
 
@@ -38,7 +35,6 @@ impl From<Ident> for AgentAttributeKeys {
             "description" => Self::Description,
             "tools" => Self::Tools,
             "output" => Self::Output,
-            "executor" => Self::Executor,
             other => Self::Unknown(other.to_string()),
         }
     }
@@ -50,7 +46,6 @@ impl Parse for AgentAttributes {
         let mut description = None;
         let mut tools = None;
         let mut output = None;
-        let mut executor_type = None;
 
         while !input.is_empty() {
             let key: Ident = input.parse()?;
@@ -77,9 +72,6 @@ impl Parse for AgentAttributes {
                         content.parse_terminated(Ident::parse, Token![,])?;
                     tools = Some(punctuated_idents.into_iter().collect::<Vec<Ident>>());
                 }
-                AgentAttributeKeys::Executor => {
-                    executor_type = Some(input.parse::<Type>()?);
-                }
                 AgentAttributeKeys::Unknown(other) => {
                     return Err(syn::Error::new(
                         key_span,
@@ -105,12 +97,6 @@ impl Parse for AgentAttributes {
                 )
             })?,
             output,
-            executor_type: executor_type.ok_or_else(|| {
-                syn::Error::new(
-                    input.span(),
-                    format!("Missing attribute: {}", AgentAttributeKeys::Executor),
-                )
-            })?,
             tools,
         })
     }
@@ -128,7 +114,6 @@ impl AgentParser {
         let agent_description = agent_attrs.description;
         let tool_idents = agent_attrs.tools.unwrap_or_default();
         let output_type = agent_attrs.output;
-        let executor_type = agent_attrs.executor_type;
 
         let quoted_output_type = match &output_type {
             Some(output_ty) => quote! { #output_ty },
@@ -176,8 +161,6 @@ impl AgentParser {
                     ]
                 }
             }
-
-            impl #executor_type for #struct_name {}
 
             impl std::fmt::Debug for #struct_name {
                 fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

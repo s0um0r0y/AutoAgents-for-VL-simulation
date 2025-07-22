@@ -5,61 +5,173 @@ use crate::{
     protocol::{AgentID, Event, RuntimeID},
 };
 use async_trait::async_trait;
-use log::{debug, error};
+use log::{debug, error, info, warn};
 use std::{
-    collections::{HashMap, VecDeque},
-    sync::{atomic::AtomicBool, Arc},
+    collections::HashMap,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
 };
 use tokio::sync::{mpsc, Mutex, Notify, RwLock};
 use tokio_stream::wrappers::ReceiverStream;
 use uuid::Uuid;
 
-const DEFAULT_CHANEL_BUFFER: usize = 100;
+const DEFAULT_CHANNEL_BUFFER: usize = 100;
+const DEFAULT_INTERNAL_BUFFER: usize = 1000;
 
+/// Internal events that are processed within the runtime
+#[derive(Debug, Clone)]
+enum InternalEvent {
+    /// An event from an agent that needs processing
+    AgentEvent(Event),
+    /// Shutdown signal
+    Shutdown,
+}
+
+/// Single-threaded runtime implementation with internal event routing
 #[derive(Debug)]
 pub struct SingleThreadedRuntime {
     pub id: RuntimeID,
-    tx_event: Mutex<Option<mpsc::Sender<Event>>>,
-    rx_event: Mutex<Option<mpsc::Receiver<Event>>>,
+    // External event channel for application consumption
+    external_tx: mpsc::Sender<Event>,
+    external_rx: Mutex<Option<mpsc::Receiver<Event>>>,
+    // Internal event channel for runtime processing
+    internal_tx: mpsc::Sender<InternalEvent>,
+    internal_rx: Mutex<Option<mpsc::Receiver<InternalEvent>>>,
+    // Agent and subscription management
     agents: Arc<RwLock<HashMap<AgentID, Arc<dyn RunnableAgent>>>>,
     subscriptions: Arc<RwLock<HashMap<String, Vec<AgentID>>>>,
+    // Runtime state
     shutdown_flag: Arc<AtomicBool>,
-    event_queue: Mutex<VecDeque<Event>>,
-    event_notify: Notify,
+    shutdown_notify: Arc<Notify>,
 }
 
 impl SingleThreadedRuntime {
     pub fn new(channel_buffer: Option<usize>) -> Arc<Self> {
         let id = Uuid::new_v4();
-        let (tx_event, rx_event) = mpsc::channel(channel_buffer.unwrap_or(DEFAULT_CHANEL_BUFFER));
+        let buffer_size = channel_buffer.unwrap_or(DEFAULT_CHANNEL_BUFFER);
+
+        // Create channels
+        let (external_tx, external_rx) = mpsc::channel(buffer_size);
+        let (internal_tx, internal_rx) = mpsc::channel(DEFAULT_INTERNAL_BUFFER);
+
         Arc::new(Self {
             id,
-            tx_event: Mutex::new(Some(tx_event)),
-            rx_event: Mutex::new(Some(rx_event)),
+            external_tx,
+            external_rx: Mutex::new(Some(external_rx)),
+            internal_tx,
+            internal_rx: Mutex::new(Some(internal_rx)),
             agents: Arc::new(RwLock::new(HashMap::new())),
             subscriptions: Arc::new(RwLock::new(HashMap::new())),
             shutdown_flag: Arc::new(AtomicBool::new(false)),
-            event_queue: Mutex::new(VecDeque::new()),
-            event_notify: Notify::new(),
+            shutdown_notify: Arc::new(Notify::new()),
         })
     }
 
-    async fn tx_event(&self) -> Result<mpsc::Sender<Event>, Error> {
-        let tx_lock = self.tx_event.lock().await;
-        if let Some(sender) = tx_lock.as_ref() {
-            Ok(sender.clone())
-        } else {
-            Err(RuntimeError::EmptyTask.into())
+    /// Creates an event sender that intercepts specific events for internal processing
+    fn create_intercepting_sender(&self) -> mpsc::Sender<Event> {
+        let internal_tx = self.internal_tx.clone();
+        let (interceptor_tx, mut interceptor_rx) = mpsc::channel(DEFAULT_CHANNEL_BUFFER);
+
+        tokio::spawn(async move {
+            while let Some(event) = interceptor_rx.recv().await {
+                if let Err(e) = internal_tx.send(InternalEvent::AgentEvent(event)).await {
+                    error!("Failed to forward event to internal channel: {e}");
+                    break;
+                }
+            }
+        });
+
+        interceptor_tx
+    }
+
+    async fn process_internal_event(&self, event: InternalEvent) -> Result<(), Error> {
+        match event {
+            InternalEvent::AgentEvent(event) => {
+                self.process_agent_event(event).await?;
+            }
+            InternalEvent::Shutdown => {
+                self.shutdown_flag.store(true, Ordering::SeqCst);
+                self.shutdown_notify.notify_waiters();
+            }
         }
+        Ok(())
     }
 
-    async fn add_agent(&self, agent: Arc<dyn RunnableAgent>) {
-        self.agents.write().await.insert(agent.id(), agent.clone());
+    async fn process_agent_event(&self, event: Event) -> Result<(), Error> {
+        match event {
+            Event::PublishMessage { topic, message } => {
+                debug!("Processing publish message to topic: {topic}");
+                self.handle_publish_message(topic, message).await?;
+            }
+            Event::SendMessage { agent_id, message } => {
+                debug!("Processing send message to agent: {agent_id:?}");
+                self.handle_send_message(agent_id, message).await?;
+            }
+            _ => {
+                // All other events are forwarded to external channel
+                self.external_tx
+                    .send(event)
+                    .await
+                    .map_err(|_| RuntimeError::EmptyTask)?;
+            }
+        }
+        Ok(())
     }
 
-    async fn take_event_receiver(&self) -> Option<ReceiverStream<Event>> {
-        let mut guard = self.rx_event.lock().await;
-        guard.take().map(ReceiverStream::new)
+    async fn handle_publish_message(&self, topic: String, message: String) -> Result<(), Error> {
+        let subscriptions = self.subscriptions.read().await;
+
+        if let Some(agents) = subscriptions.get(&topic) {
+            debug!(
+                "Publishing message to topic '{}' with {} subscribers",
+                topic,
+                agents.len()
+            );
+
+            for agent_id in agents {
+                let task = Task::new(message.clone(), Some(*agent_id));
+                self.execute_task_on_agent(*agent_id, task).await?;
+            }
+        } else {
+            debug!("No subscribers for topic: {topic}");
+        }
+
+        Ok(())
+    }
+
+    async fn handle_send_message(&self, agent_id: AgentID, message: String) -> Result<(), Error> {
+        let task = Task::new(message, Some(agent_id));
+        self.execute_task_on_agent(agent_id, task).await
+    }
+
+    async fn execute_task_on_agent(&self, agent_id: AgentID, task: Task) -> Result<(), Error> {
+        let agents = self.agents.read().await;
+
+        if let Some(agent) = agents.get(&agent_id) {
+            debug!("Executing task on agent: {agent_id:?}");
+
+            // Create a new task event and send it to external channel first
+            self.external_tx
+                .send(Event::NewTask {
+                    agent_id,
+                    task: task.clone(),
+                })
+                .await
+                .map_err(|_| RuntimeError::EmptyTask)?;
+
+            // Create intercepting sender for this agent
+            let tx = self.create_intercepting_sender();
+
+            // Use spawn_task for async execution
+            agent.clone().spawn_task(task, tx);
+        } else {
+            warn!("Agent not found: {agent_id:?}");
+            return Err(RuntimeError::AgentNotFound(agent_id).into());
+        }
+
+        Ok(())
     }
 }
 
@@ -70,101 +182,206 @@ impl Runtime for SingleThreadedRuntime {
     }
 
     async fn publish_message(&self, message: String, topic: String) -> Result<(), Error> {
-        let subscriptions = self.subscriptions.read().await;
+        debug!(
+            "Runtime received publish_message request for topic: {}",
+            topic
+        );
 
-        if let Some(agents) = subscriptions.get(&topic) {
-            let mut queue = self.event_queue.lock().await;
-
-            for agent_id in agents {
-                let task = Task::new(message.clone(), Some(*agent_id));
-                let event = Event::NewTask {
-                    agent_id: *agent_id,
-                    task,
-                };
-                queue.push_back(event);
-                self.event_notify.notify_one();
-            }
-        }
+        // Send the publish event through internal channel
+        self.internal_tx
+            .send(InternalEvent::AgentEvent(Event::PublishMessage {
+                topic,
+                message,
+            }))
+            .await
+            .map_err(|_| RuntimeError::EmptyTask)?;
 
         Ok(())
     }
 
     async fn send_message(&self, message: String, agent_id: AgentID) -> Result<(), Error> {
-        let task = Task::new(message.clone(), Some(agent_id));
-        if let Some(agent) = self.agents.read().await.get(&agent_id) {
-            agent.clone().spawn_task(task, self.tx_event().await?);
-        } else {
-            return Err(RuntimeError::AgentNotFound(agent_id).into());
-        }
+        debug!(
+            "Runtime received send_message request to agent: {:?}",
+            agent_id
+        );
+
+        // Send the event through internal channel
+        self.internal_tx
+            .send(InternalEvent::AgentEvent(Event::SendMessage {
+                agent_id,
+                message,
+            }))
+            .await
+            .map_err(|_| RuntimeError::EmptyTask)?;
+
         Ok(())
     }
 
     async fn register_agent(&self, agent: Arc<dyn RunnableAgent>) -> Result<(), Error> {
-        self.add_agent(agent).await;
+        let agent_id = agent.id();
+        info!("Registering agent: {:?}", agent_id);
+
+        self.agents.write().await.insert(agent_id, agent);
         Ok(())
     }
 
     async fn subscribe(&self, agent_id: AgentID, topic: String) -> Result<(), Error> {
-        let mut subscribed_agents = self
-            .subscriptions
-            .read()
-            .await
-            .get(&topic)
-            .cloned()
-            .unwrap_or_default();
-        subscribed_agents.push(agent_id);
-        self.subscriptions
-            .write()
-            .await
-            .insert(topic, subscribed_agents);
+        info!("Agent {:?} subscribing to topic: {}", agent_id, topic);
+
+        let mut subscriptions = self.subscriptions.write().await;
+        let agents = subscriptions.entry(topic).or_insert_with(Vec::new);
+
+        if !agents.contains(&agent_id) {
+            agents.push(agent_id);
+        }
+
         Ok(())
     }
 
     async fn take_event_receiver(&self) -> Option<ReceiverStream<Event>> {
-        self.take_event_receiver().await
+        self.external_rx
+            .lock()
+            .await
+            .take()
+            .map(ReceiverStream::new)
     }
 
     async fn run(&self) -> Result<(), Error> {
-        debug!("Runtime event loop startng");
+        info!("Runtime starting");
+
+        // Take the internal receiver
+        let mut internal_rx = self
+            .internal_rx
+            .lock()
+            .await
+            .take()
+            .ok_or(RuntimeError::EmptyTask)?;
+
+        // Process events until shutdown
         loop {
-            if self.shutdown_flag.load(std::sync::atomic::Ordering::SeqCst) {
-                break;
-            }
-            let event = {
-                let mut queue = self.event_queue.lock().await;
-                queue.pop_front()
-            };
-            match event {
-                Some(Event::NewTask { agent_id, task }) => {
-                    if let Some(agent) = self.agents.read().await.get(&agent_id) {
-                        agent.clone().run(task, self.tx_event().await?).await?;
+            tokio::select! {
+                // Process internal events
+                Some(event) = internal_rx.recv() => {
+                    if let Err(e) = self.process_internal_event(event).await {
+                        error!("Error processing internal event: {e}");
                     }
                 }
-                Some(e) => {
-                    error!("Unhandled Runtime Task: {e:?}");
-                }
-                None => {
-                    self.event_notify.notified().await;
-                }
-            }
-        }
-        debug!("Draning remainging tasks");
-        let mut queue = self.event_queue.lock().await;
-        while let Some(event) = queue.pop_front() {
-            if let Event::NewTask { agent_id, task } = event {
-                if let Some(agent) = self.agents.read().await.get(&agent_id) {
-                    agent.clone().run(task, self.tx_event().await?).await?;
+                // Check for shutdown
+                _ = self.shutdown_notify.notified() => {
+                    if self.shutdown_flag.load(Ordering::SeqCst) {
+                        info!("Runtime received shutdown signal");
+                        break;
+                    }
                 }
             }
         }
+
+        // Drain remaining events
+        info!("Draining remaining events before shutdown");
+        while let Ok(event) = internal_rx.try_recv() {
+            if let Err(e) = self.process_internal_event(event).await {
+                error!("Error processing event during shutdown: {e}");
+            }
+        }
+
+        info!("Runtime stopped");
         Ok(())
     }
 
     async fn stop(&self) -> Result<(), Error> {
-        self.shutdown_flag
-            .store(true, std::sync::atomic::Ordering::SeqCst);
-        // wake the loop if it's waiting
-        self.event_notify.notify_one();
+        info!("Initiating runtime shutdown");
+
+        // Send shutdown signal
+        let _ = self.internal_tx.send(InternalEvent::Shutdown).await;
+
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::memory::MemoryProvider;
+    use crate::protocol::TaskResult;
+    use tokio::time::{sleep, Duration};
+
+    #[derive(Debug, Clone)]
+    struct MockAgent {
+        id: AgentID,
+    }
+
+    #[async_trait]
+    impl RunnableAgent for MockAgent {
+        fn id(&self) -> AgentID {
+            self.id
+        }
+
+        fn name(&self) -> &'static str {
+            "test"
+        }
+
+        fn description(&self) -> &'static str {
+            "test"
+        }
+
+        fn memory(&self) -> Option<Arc<RwLock<Box<dyn MemoryProvider>>>> {
+            None
+        }
+
+        async fn run(self: Arc<Self>, task: Task, tx: mpsc::Sender<Event>) -> Result<(), Error> {
+            // Send task started event
+            tx.send(Event::TaskStarted {
+                sub_id: task.submission_id,
+                agent_id: self.id,
+                task_description: task.prompt.clone(),
+            })
+            .await
+            .unwrap();
+
+            // Simulate some work
+            sleep(Duration::from_millis(10)).await;
+
+            // Send task complete event
+            tx.send(Event::TaskComplete {
+                sub_id: task.submission_id,
+                result: TaskResult::Value(serde_json::json!({
+                    "message": "Task completed successfully"
+                })),
+            })
+            .await
+            .unwrap();
+
+            Ok(())
+        }
+    }
+
+    #[tokio::test]
+    async fn test_runtime_creation() {
+        let runtime = SingleThreadedRuntime::new(None);
+        assert_ne!(runtime.id(), Uuid::nil());
+    }
+
+    #[tokio::test]
+    async fn test_agent_registration() {
+        let runtime = SingleThreadedRuntime::new(None);
+        let agent = Arc::new(MockAgent { id: Uuid::new_v4() });
+
+        runtime.register_agent(agent.clone()).await.unwrap();
+
+        let agents = runtime.agents.read().await;
+        assert!(agents.contains_key(&agent.id()));
+    }
+
+    #[tokio::test]
+    async fn test_subscription() {
+        let runtime = SingleThreadedRuntime::new(None);
+        let agent_id = Uuid::new_v4();
+        let topic = "test_topic".to_string();
+
+        runtime.subscribe(agent_id, topic.clone()).await.unwrap();
+
+        let subscriptions = runtime.subscriptions.read().await;
+        assert!(subscriptions.contains_key(&topic));
+        assert!(subscriptions.get(&topic).unwrap().contains(&agent_id));
     }
 }

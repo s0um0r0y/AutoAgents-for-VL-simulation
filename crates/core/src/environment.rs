@@ -4,6 +4,7 @@ use crate::runtime::manager::RuntimeManager;
 use crate::runtime::{Runtime, RuntimeError};
 use std::path::PathBuf;
 use std::sync::Arc;
+use tokio::task::JoinHandle;
 use tokio_stream::wrappers::ReceiverStream;
 
 #[derive(Debug, thiserror::Error)]
@@ -79,11 +80,11 @@ impl Environment {
             .ok_or_else(|| EnvironmentError::RuntimeNotFound(rid).into())
     }
 
-    pub fn run(&mut self) {
+    pub fn run(&mut self) -> JoinHandle<Result<(), RuntimeError>> {
         let manager = self.runtime_manager.clone();
         // Spawn background task to run the runtimes.
         let handle = tokio::spawn(async move { manager.run().await });
-        self.handle = Some(handle);
+        handle
     }
 
     pub async fn take_event_receiver(

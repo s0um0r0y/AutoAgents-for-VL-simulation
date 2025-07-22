@@ -19,7 +19,10 @@ pub type EventId = Uuid;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Event {
     /// A new task has been submitted to an agent
-    NewTask { agent_id: AgentID, task: Task },
+    NewTask {
+        agent_id: AgentID,
+        task: Task,
+    },
 
     /// A task has started execution
     TaskStarted {
@@ -71,6 +74,14 @@ pub enum Event {
     TurnCompleted {
         turn_number: usize,
         final_turn: bool,
+    },
+    PublishMessage {
+        topic: String,
+        message: String,
+    },
+    SendMessage {
+        message: String,
+        agent_id: AgentID,
     },
 }
 

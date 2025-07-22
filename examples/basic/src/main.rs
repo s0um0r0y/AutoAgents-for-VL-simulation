@@ -1,11 +1,17 @@
 use clap::{Parser, ValueEnum};
 use std::sync::Arc;
+mod chaining;
 mod simple;
-use autoagents::{core::error::Error, llm::backends::openai::OpenAI, llm::builder::LLMBuilder};
+use autoagents::{
+    core::error::Error,
+    init_logging,
+    llm::{backends::openai::OpenAI, builder::LLMBuilder},
+};
 
 #[derive(Debug, Clone, ValueEnum)]
 enum UseCase {
     Simple,
+    Chaining,
 }
 
 /// Simple program to demonstrate AutoAgents functionality
@@ -18,6 +24,7 @@ struct Args {
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {
+    init_logging();
     let args = Args::parse();
     // Check if API key is set
     let api_key = std::env::var("OPENAI_API_KEY").unwrap_or("".into());
@@ -34,6 +41,7 @@ async fn main() -> Result<(), Error> {
 
     match args.usecase {
         UseCase::Simple => simple::simple_agent(llm).await?,
+        UseCase::Chaining => chaining::run(llm).await?,
     }
 
     Ok(())

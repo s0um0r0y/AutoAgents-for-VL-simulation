@@ -61,9 +61,10 @@ Remember: You are a systematic problem solver. Think through each step, use your
         ListDirectoryTool,
         AnalyzeCodeTool
     ],
-    executor = ReActExecutor,
 )]
 pub struct CodingAgent {}
+
+impl ReActExecutor for CodingAgent {}
 
 #[agent(
     name = "concise_coding_agent",
@@ -96,6 +97,7 @@ Keep responses under 2 lines unless showing code or results.",
         ListDirectoryTool,
         AnalyzeCodeTool
     ],
-    executor = ReActExecutor,
 )]
 pub struct ConciseCodingAgent {}
+
+impl ReActExecutor for ConciseCodingAgent {}

@@ -5,7 +5,6 @@ use autoagents::core::error::Error;
 use autoagents::core::memory::SlidingWindowMemory;
 use autoagents::core::protocol::{Event, TaskResult};
 use autoagents::core::runtime::{Runtime, SingleThreadedRuntime};
-use autoagents::init_logging;
 use autoagents::llm::{LLMProvider, ToolCallError, ToolInputT, ToolT};
 use autoagents_derive::{agent, tool, AgentOutput, ToolInput};
 use colored::*;
@@ -44,14 +43,13 @@ pub struct MathAgentOutput {
     name = "math_agent",
     description = "You are a Math agent",
     tools = [Addition],
-    executor = ReActExecutor,
     output = MathAgentOutput
 )]
 pub struct MathAgent {}
 
-pub async fn simple_agent(llm: Arc<dyn LLMProvider>) -> Result<(), Error> {
-    init_logging();
+impl ReActExecutor for MathAgent {}
 
+pub async fn simple_agent(llm: Arc<dyn LLMProvider>) -> Result<(), Error> {
     let sliding_window_memory = Box::new(SlidingWindowMemory::new(10));
 
     let agent = MathAgent {};
@@ -73,8 +71,6 @@ pub async fn simple_agent(llm: Arc<dyn LLMProvider>) -> Result<(), Error> {
     let receiver = environment.take_event_receiver(None).await;
     handle_events(receiver);
 
-    environment.run();
-
     runtime
         .publish_message("What is 2 + 2?".into(), "test".into())
         .await
@@ -84,8 +80,7 @@ pub async fn simple_agent(llm: Arc<dyn LLMProvider>) -> Result<(), Error> {
         .await
         .unwrap();
 
-    // Shutdown
-    let _ = environment.shutdown().await;
+    let _ = environment.run().await;
     Ok(())
 }
 

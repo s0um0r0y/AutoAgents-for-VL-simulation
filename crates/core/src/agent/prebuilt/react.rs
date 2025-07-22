@@ -404,6 +404,7 @@ impl<T: ReActExecutor> AgentExecutor for T {
         }
     }
 }
+
 #[cfg(test)]
 mod tests {
     use super::*;

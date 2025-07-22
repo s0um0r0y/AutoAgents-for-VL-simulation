@@ -156,10 +156,11 @@ pub struct MathAgentOutput {
     name = "math_agent",
     description = "You are a Math agent",
     tools = [Addition],
-    executor = ReActExecutor,
     output = MathAgentOutput
 )]
 pub struct MathAgent {}
+
+impl ReActExecutor for MathAgent {}
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {
@@ -198,8 +199,6 @@ async fn main() -> Result<(), Error> {
     let receiver = environment.take_event_receiver(None).await;
     handle_events(receiver);
 
-    environment.run();
-
     runtime
         .publish_message("What is 2 + 2?".into(), "test".into())
         .await
@@ -209,8 +208,7 @@ async fn main() -> Result<(), Error> {
         .await
         .unwrap();
 
-    // Shutdown
-    let _ = environment.shutdown().await;
+    let _ = environment.run().await;
     Ok(())
 }
 
