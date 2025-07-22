@@ -47,7 +47,7 @@ AutoAgents is a cutting-edge multi-agent framework built in Rust that enables th
 ### 🤖 **Multi-Agent Orchestration**
 - **Agent Coordination**: Seamless communication and collaboration between multiple agents
 - **Task Distribution**: Intelligent workload distribution across agent networks
-- **Knowledge Sharing**: Shared memory and context between agents (In Roadmap)
+- **Knowledge Sharing**: Shared memory and context between agents (In Roadmap
 
 ---
 
@@ -73,19 +73,6 @@ AutoAgents supports a wide range of LLM providers, allowing you to choose the be
 
 ## 📦 Installation
 
-### Adding AutoAgents to Your Project
-
-Add AutoAgents to your `Cargo.toml`:
-
-```toml
-[dependencies]
-autoagents = "0.2.0-alpha.0"
-autoagents-derive = "0.2.0-alpha.0"
-tokio = { version = "1.43.0", features = ["full"] }
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-```
-
 ### Development Setup
 
 For contributing to AutoAgents or building from source:
@@ -107,10 +94,6 @@ brew install lefthook
 ```bash
 # Using npm
 npm install -g lefthook
-
-# Or download binary from releases
-curl -1sLf 'https://dl.cloudsmith.io/public/evilmartians/lefthook/setup.deb.sh' | sudo -E bash
-sudo apt install lefthook
 ```
 
 #### Clone and Setup
@@ -352,7 +335,7 @@ cargo tarpaulin --all-features --out html
 
 This project uses LeftHook for Git hooks management. The hooks will automatically:
 - Format code with `cargo fmt --check`
-- Run linting with `cargo clippy -- -D warnings`  
+- Run linting with `cargo clippy -- -D warnings`
 - Execute tests with `cargo test --features full`
 
 ### Contributing
