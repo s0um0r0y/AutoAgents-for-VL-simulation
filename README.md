@@ -3,7 +3,7 @@
 
   # AutoAgents
 
-  **A Modern Multi-Agent Framework for Rust**
+  **A Modern Multi-Agent Framework in Rust**
 
   [![Crates.io](https://img.shields.io/crates/v/autoagents.svg)](https://crates.io/crates/autoagents)
   [![Documentation](https://docs.rs/autoagents/badge.svg)](https://liquidos-ai.github.io/AutoAgents)
