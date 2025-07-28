@@ -39,6 +39,13 @@ AutoAgents is a cutting-edge multi-agent framework built in Rust that enables th
 - **Custom Output Types**: Define complex structured outputs for your agents
 - **Serialization**: Built-in support for various data formats
 
+### 🕹️ WASM Runtime for Tool Execution
+- **Sandboxed Environment**: Secure and isolated execution of tools using WebAssembly
+- **Cross-Platform Compatibility**: Run tools uniformly across diverse platforms and architectures
+- **Fast Startup & Low Overhead**: Near-native performance with minimal resource consumption
+- **Safe Resource Control**: Limit CPU, memory, and execution time to prevent runaway processes
+- **Extensibility:** Easily add new tools from Hub (Coming Soon!)
+
 ### 🎯 **ReAct Framework**
 - **Reasoning**: Advanced reasoning capabilities with step-by-step logic
 - **Acting**: Tool execution with intelligent decision making
@@ -47,7 +54,7 @@ AutoAgents is a cutting-edge multi-agent framework built in Rust that enables th
 ### 🤖 **Multi-Agent Orchestration**
 - **Agent Coordination**: Seamless communication and collaboration between multiple agents
 - **Task Distribution**: Intelligent workload distribution across agent networks
-- **Knowledge Sharing**: Shared memory and context between agents (In Roadmap
+- **Knowledge Sharing**: Shared memory and context between agents (In Roadmap)
 
 ---
 
@@ -155,8 +162,14 @@ pub struct AdditionArgs {
     description = "Use this tool to Add two numbers",
     input = AdditionArgs,
 )]
-fn add(args: AdditionArgs) -> Result<i64, ToolCallError> {
-    Ok(args.left + args.right)
+struct Addition {}
+
+impl ToolRuntime for Addition {
+    fn execute(&self, args: Value) -> Result<Value, ToolCallError> {
+        let typed_args: AdditionArgs = serde_json::from_value(args)?;
+        let result = typed_args.left + typed_args.right;
+        Ok(result.into())
+    }
 }
 
 /// Math agent output with Value and Explanation
@@ -276,6 +289,14 @@ A simple agent demonstrating core functionality and event-driven architecture.
 ```bash
 export OPENAI_API_KEY="your-api-key"
 cargo run --package basic-example -- --usecase simple
+```
+
+### [WASM Tool Execution](examples/wasm_runner/)
+A simple agent which can run tools in WASM runtime.
+
+```bash
+export OPENAI_API_KEY="your-api-key"
+cargo run --package wasm-runner
 ```
 
 ### [Coding Agent](examples/coding_agent/)

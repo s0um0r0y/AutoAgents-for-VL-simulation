@@ -33,8 +33,14 @@ pub struct AdditionArgs {
     description = "Use this tool to Add two numbers",
     input = AdditionArgs,
 )]
-fn add(args: AdditionArgs) -> Result<i64, ToolCallError> {
-    Ok(args.left + args.right)
+struct Addition {}
+
+impl ToolRuntime for Addition {
+    fn execute(&self, args: Value) -> Result<Value, ToolCallError> {
+        let typed_args: AdditionArgs = serde_json::from_value(args)?;
+        let result = typed_args.left + typed_args.right;
+        Ok(result.into())
+    }
 }
 
 /// Math agent output with Value and Explanation
