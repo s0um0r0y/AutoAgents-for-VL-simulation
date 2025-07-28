@@ -29,13 +29,6 @@ mod tests {
     }
 
     #[test]
-    fn test_core_module_available() {
-        // Test that we can access core module
-        let config = core::environment::EnvironmentConfig::default();
-        assert_eq!(config.channel_buffer, 100);
-    }
-
-    #[test]
     fn test_llm_module_available() {
         // Test that we can access llm module
         let request = llm::completion::CompletionRequest::new("test prompt");
@@ -138,10 +131,8 @@ mod tests {
 
         let config = EnvironmentConfig {
             working_dir: std::path::PathBuf::from("/tmp"),
-            channel_buffer: 50,
         };
 
-        assert_eq!(config.channel_buffer, 50);
         assert_eq!(config.working_dir, std::path::PathBuf::from("/tmp"));
     }
 

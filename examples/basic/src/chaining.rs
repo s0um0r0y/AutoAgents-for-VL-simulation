@@ -144,7 +144,7 @@ pub async fn run(llm: Arc<dyn LLMProvider>) -> Result<(), Error> {
     let mut environment = Environment::new(None);
     let _ = environment.register_runtime(runtime.clone()).await;
 
-    let receiver = environment.take_event_receiver(None).await;
+    let receiver = environment.take_event_receiver(None).await?;
     handle_events(receiver);
 
     runtime
@@ -164,30 +164,28 @@ pub async fn run(llm: Arc<dyn LLMProvider>) -> Result<(), Error> {
     Ok(())
 }
 
-fn handle_events(event_stream: Option<ReceiverStream<Event>>) {
-    if let Some(mut event_stream) = event_stream {
-        tokio::spawn(async move {
-            while let Some(event) = event_stream.next().await {
-                match event {
-                    Event::NewTask { agent_id: _, task } => {
-                        println!("{}", format!("New TASK: {:?}", task).green());
-                    }
-                    Event::TaskComplete { result, .. } => {
-                        match result {
-                            TaskResult::Value(val) => {
-                                let agent_out: String = serde_json::from_value(val).unwrap();
-                                println!("{}", format!("Thought: {}", agent_out).green());
-                            }
-                            _ => {
-                                //
-                            }
+fn handle_events(mut event_stream: ReceiverStream<Event>) {
+    tokio::spawn(async move {
+        while let Some(event) = event_stream.next().await {
+            match event {
+                Event::NewTask { agent_id: _, task } => {
+                    println!("{}", format!("New TASK: {:?}", task).green());
+                }
+                Event::TaskComplete { result, .. } => {
+                    match result {
+                        TaskResult::Value(val) => {
+                            let agent_out: String = serde_json::from_value(val).unwrap();
+                            println!("{}", format!("Thought: {}", agent_out).green());
+                        }
+                        _ => {
+                            //
                         }
                     }
-                    _ => {
-                        //
-                    }
+                }
+                _ => {
+                    //
                 }
             }
-        });
-    }
+        }
+    });
 }
