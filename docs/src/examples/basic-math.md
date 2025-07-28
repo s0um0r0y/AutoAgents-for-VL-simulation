@@ -22,7 +22,7 @@ use autoagents::core::memory::SlidingWindowMemory;
 use autoagents::core::protocol::{Event, TaskResult};
 use autoagents::core::runtime::{Runtime, SingleThreadedRuntime};
 use autoagents::init_logging;
-use autoagents::llm::{ToolCallError, ToolInputT, ToolT};
+use autoagents::core::tool::{ToolCallError, ToolInputT, ToolT};
 use autoagents::{llm::backends::openai::OpenAI, llm::builder::LLMBuilder};
 use autoagents_derive::{agent, tool, AgentOutput, ToolInput};
 use colored::*;
