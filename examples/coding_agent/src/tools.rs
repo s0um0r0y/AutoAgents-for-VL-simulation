@@ -1,4 +1,4 @@
-use autoagents::llm::{ToolCallError, ToolInputT, ToolT};
+use autoagents::core::tool::{ToolCallError, ToolInputT, ToolT};
 use autoagents_derive::{tool, ToolInput};
 use regex::Regex;
 use serde::{Deserialize, Serialize};

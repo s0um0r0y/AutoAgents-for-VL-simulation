@@ -1,10 +1,10 @@
-use crate::agent::base::AgentConfig;
 use crate::agent::runnable::AgentState;
 use crate::memory::MemoryProvider;
 use crate::protocol::Event;
 use crate::runtime::Task;
+use crate::{agent::base::AgentConfig, tool::ToolT};
 use async_trait::async_trait;
-use autoagents_llm::{LLMProvider, ToolT};
+use autoagents_llm::LLMProvider;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use serde_json::Value;
@@ -75,7 +75,7 @@ mod tests {
         embedding::EmbeddingProvider,
         error::LLMError,
         models::ModelsProvider,
-        LLMProvider, ToolCall, ToolT,
+        LLMProvider, ToolCall,
     };
     use serde::{Deserialize, Serialize};
     use std::sync::Arc;

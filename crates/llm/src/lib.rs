@@ -43,9 +43,6 @@ pub mod secret_store;
 /// Listing models support
 pub mod models;
 
-mod tool;
-pub use tool::{ToolCallError, ToolInputT, ToolT};
-
 /// Core trait that all LLM providers must implement, combining chat, completion
 /// and embedding capabilities into a unified interface
 pub trait LLMProvider:

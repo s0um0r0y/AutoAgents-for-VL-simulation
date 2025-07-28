@@ -17,7 +17,10 @@ pub fn init_logging() {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use autoagents_core::runtime::SingleThreadedRuntime;
+    use autoagents_core::{
+        runtime::SingleThreadedRuntime,
+        tool::{ToolCallResult, ToolT},
+    };
     use autoagents_test_utils::llm::MockLLMProvider;
     use std::sync::Arc;
 
@@ -82,7 +85,7 @@ mod tests {
                 "A mock agent for testing"
             }
 
-            fn tools(&self) -> Vec<Box<dyn llm::ToolT>> {
+            fn tools(&self) -> Vec<Box<dyn ToolT>> {
                 vec![]
             }
 
@@ -113,7 +116,7 @@ mod tests {
     #[test]
     fn test_tool_types_available() {
         // Test that tool types are accessible
-        let tool_result = crate::core::tool::ToolCallResult {
+        let tool_result = ToolCallResult {
             tool_name: "test_tool".to_string(),
             success: true,
             arguments: serde_json::json!({"param": "value"}),

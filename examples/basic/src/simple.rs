@@ -5,7 +5,8 @@ use autoagents::core::error::Error;
 use autoagents::core::memory::SlidingWindowMemory;
 use autoagents::core::protocol::{Event, TaskResult};
 use autoagents::core::runtime::{Runtime, SingleThreadedRuntime};
-use autoagents::llm::{LLMProvider, ToolCallError, ToolInputT, ToolT};
+use autoagents::core::tool::{ToolCallError, ToolInputT, ToolT};
+use autoagents::llm::LLMProvider;
 use autoagents_derive::{agent, tool, AgentOutput, ToolInput};
 use colored::*;
 use serde::{Deserialize, Serialize};
@@ -122,26 +123,24 @@ fn handle_events(mut event_stream: ReceiverStream<Event>) {
                             .green()
                     );
                 }
-                Event::TaskComplete { result, .. } => {
-                    match result {
-                        TaskResult::Value(val) => {
-                            let agent_out: ReActAgentOutput = serde_json::from_value(val).unwrap();
-                            let math_out: MathAgentOutput =
-                                serde_json::from_str(&agent_out.response).unwrap();
-                            println!(
-                                "{}",
-                                format!(
-                                    "Math Value: {}, Explanation: {}",
-                                    math_out.value, math_out.explanation
-                                )
-                                .green()
-                            );
-                        }
-                        _ => {
-                            //
-                        }
+                Event::TaskComplete { result, .. } => match result {
+                    TaskResult::Value(val) => {
+                        let agent_out: ReActAgentOutput = serde_json::from_value(val).unwrap();
+                        let math_out: MathAgentOutput =
+                            serde_json::from_str(&agent_out.response).unwrap();
+                        println!(
+                            "{}",
+                            format!(
+                                "Math Value: {}, Explanation: {}",
+                                math_out.value, math_out.explanation
+                            )
+                            .green()
+                        );
                     }
-                }
+                    _ => {
+                        println!("{}", format!("Error!!!").red());
+                    }
+                },
                 Event::TurnStarted {
                     turn_number,
                     max_turns,
