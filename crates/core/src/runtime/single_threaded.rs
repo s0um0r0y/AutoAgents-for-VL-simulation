@@ -22,7 +22,7 @@ const DEFAULT_INTERNAL_BUFFER: usize = 1000;
 
 /// Internal events that are processed within the runtime
 #[derive(Debug, Clone)]
-enum InternalEvent {
+pub enum InternalEvent {
     /// An event from an agent that needs processing
     AgentEvent(Event),
     /// Shutdown signal
@@ -114,7 +114,7 @@ impl SingleThreadedRuntime {
                 self.external_tx
                     .send(event)
                     .await
-                    .map_err(|_| RuntimeError::EmptyTask)?;
+                    .map_err(RuntimeError::EventError)?;
             }
         }
         Ok(())
@@ -159,7 +159,7 @@ impl SingleThreadedRuntime {
                     task: task.clone(),
                 })
                 .await
-                .map_err(|_| RuntimeError::EmptyTask)?;
+                .map_err(RuntimeError::EventError)?;
 
             // Create intercepting sender for this agent
             let tx = self.create_intercepting_sender();
@@ -194,7 +194,7 @@ impl Runtime for SingleThreadedRuntime {
                 message,
             }))
             .await
-            .map_err(|_| RuntimeError::EmptyTask)?;
+            .map_err(RuntimeError::InternalEventError)?;
 
         Ok(())
     }
@@ -212,7 +212,7 @@ impl Runtime for SingleThreadedRuntime {
                 message,
             }))
             .await
-            .map_err(|_| RuntimeError::EmptyTask)?;
+            .map_err(RuntimeError::InternalEventError)?;
 
         Ok(())
     }
@@ -262,6 +262,7 @@ impl Runtime for SingleThreadedRuntime {
             tokio::select! {
                 // Process internal events
                 Some(event) = internal_rx.recv() => {
+                    debug!("Processing internal event: {event:?}");
                     if let Err(e) = self.process_internal_event(event).await {
                         error!("Error processing internal event: {e}");
                     }
