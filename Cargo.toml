@@ -30,11 +30,11 @@ keywords = ["agents", "llm"]
 categories = []
 
 [workspace.dependencies]
-autoagents = { version = "0.2.0-alpha.0", path = "crates/autoagents" }
-autoagents-llm = { version = "0.2.0-alpha.0", path = "crates/llm" }
-autoagents-derive = { version = "0.2.0-alpha.0", path = "crates/derive" }
-autoagents-core = { version = "0.2.0-alpha.0", path = "crates/core" }
-liquid-edge = { version = "0.2.0-alpha-0", path = "crates/liquid-edge" }
+autoagents = { path = "crates/autoagents" }
+autoagents-llm = { path = "crates/llm" }
+autoagents-derive = { path = "crates/derive" }
+autoagents-core = { path = "crates/core" }
+liquid-edge = { path = "crates/liquid-edge" }
 syn = { version = "2.0.98", features = ["full"] }
 tokio = { version = "1.43.0", features = ["full"] }
 async-trait = "0.1.86"
